@@ -39,7 +39,7 @@ CSS = r"""
 :root[data-theme="dark"]{--bg:#0f1115;--card:#171a20;--ink:#e7e9ee;--muted:#9aa3af;--line:#2a2f38;
 --accent:#7aa2ff;--ok:#5fd39a;--ok-bg:#163126;--likely:#5cc8d6;--likely-bg:#12303a;--check:#f2c063;--check-bg:#352a12;
 --chip:#232832;--gap:#ff9b9b;--gap-bg:#3a1c1f;--new:#b59bff;--code:#1d2129}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 .wrap{max-width:1000px;margin:0 auto;padding:24px 16px 80px}
 h1{font-size:24px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 18px}
 .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:10px;margin-bottom:16px}
@@ -81,6 +81,8 @@ h4{margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;c
 .hint{color:var(--muted);font-size:12px}
 textarea{width:100%;min-height:260px;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--code);color:var(--ink);font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
 textarea.note{min-height:90px}
+.settings{display:grid;gap:10px;margin-top:10px}.settings label{display:grid;gap:4px;font-size:14px;color:var(--muted)}
+.settings input,.settings textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;min-height:0}
 .empty{text-align:center;color:var(--muted);padding:40px}
 .warn{background:var(--check-bg);color:var(--check);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:14px}
 """
@@ -90,12 +92,28 @@ const DATA = JSON.parse(document.getElementById('data').textContent);
 const KEY = 'ajh-state-v1';
 let state = {};
 try { state = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const byId = {}; DATA.jobs.forEach(j => { byId[j.id] = j; });
+let db = null, sample = null, mcp = null;
+const timers = {};
 const st = k => (state[k] = state[k] || {});
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ago = iso => { if (!iso) return 'date unknown'; const d = (Date.now() - new Date(iso)) / 864e5;
   return d < 1 ? 'today' : d < 2 ? 'yesterday' : Math.floor(d) + ' days ago'; };
 const LABEL = {ELIGIBLE: 'Eligible from Jordan', LIKELY: 'Likely eligible', CHECK: 'Check eligibility'};
+const setSync = t => { const el = document.getElementById('sync'); if (el) el.textContent = t; };
+
+function save(j) {
+  const s = st(j.key);
+  s.updatedAt = new Date().toISOString();
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  if (!db) return;
+  clearTimeout(timers[j.id]);
+  timers[j.id] = setTimeout(() => {
+    db.doc('state/' + j.id).set(Object.assign({}, state[j.key], {key: j.key}))
+      .then(() => setSync('Synced across your devices'))
+      .catch(err => setSync('Not synced (' + ((err && err.code) || 'error') + ') — saved on this device'));
+  }, 700);
+}
 
 function guesses(first, last, domain) {
   first = (first || '').toLowerCase().replace(/[^a-z]/g, ''); last = (last || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -107,18 +125,17 @@ function guesses(first, last, domain) {
 function fill(text, first) { return text.split('{FIRST_NAME}').join(first || 'there'); }
 function copy(text, btn) {
   const done = () => { const o = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(() => btn.textContent = o, 1200); };
-  if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, () => fallback());
-  else fallback();
-  function fallback() { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select();
-    document.execCommand('copy'); t.remove(); done(); }
+  const fallback = () => { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select();
+    document.execCommand('copy'); t.remove(); done(); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
 }
 
-function card(j, i) {
+function card(j) {
   const s = st(j.key);
   const c = j.contacts;
   const el = document.createElement('div');
   el.className = 'card' + (s.status && s.status !== 'todo' ? ' done' : '');
-  el.dataset.i = i;
+  el.dataset.id = j.id;
   const found = [
     ...c.people.map(p => `<div>👤 ${esc(p)} <span class="hint">(named in posting)</span></div>`),
     ...c.emails.map(e => `<div>✉️ <a href="mailto:${esc(e.email)}">${esc(e.email)}</a> <span class="hint">(${esc(e.kind)}, in posting)</span></div>`)
@@ -134,7 +151,7 @@ function card(j, i) {
     <div class="score">${j.fit_score}<small>fit / 100</small></div>
   </div>
   <div class="why"><b>Why:</b> ${esc(j.eligibility_reason)}${j.eligibility_evidence ? `<div class="ev">${esc(j.eligibility_evidence)}</div>` : ''}</div>
-  <div class="chips">${j.matched_skills.map(s => `<span class="chip">${esc(s)}</span>`).join('')}${j.gaps.map(s => `<span class="chip gap" title="Asked for in the posting, not on your resume">gap: ${esc(s)}</span>`).join('')}</div>
+  <div class="chips">${j.matched_skills.map(x => `<span class="chip">${esc(x)}</span>`).join('')}${j.gaps.map(x => `<span class="chip gap" title="Asked for in the posting, not on your resume">gap: ${esc(x)}</span>`).join('')}</div>
   <div class="actions">
     <a class="btn primary" href="${esc(j.url)}" target="_blank" rel="noopener">Open posting ↗</a>
     ${['todo','applied','emailed','skip'].map(x => `<button data-status="${x}" class="${(s.status||'todo')===x?'on':''}">${{todo:'To do',applied:'Applied',emailed:'Emailed',skip:'Skip'}[x]}</button>`).join('')}
@@ -156,14 +173,15 @@ function card(j, i) {
       <div>
         <h4>Email</h4>
         <div class="row"><input data-f="subject" value="${esc(s.subject||j.drafts.subject)}"><button data-copy="subject">Copy</button></div>
-        <textarea data-f="body">${esc(s.body||'')}</textarea>
+        <textarea data-f="body"></textarea>
         <div class="actions">
           <button data-copy="body">Copy email</button>
           <a class="btn primary" data-gmail target="_blank" rel="noopener">Open in Gmail ↗</a>
           <a class="btn" data-mailto>Email app</a>
-          <button data-copy="prompt" title="Paste into Claude for a sharper rewrite">Copy prompt for Claude</button>
-          <a class="btn" href="https://claude.ai/new" target="_blank" rel="noopener">claude.ai ↗</a>
+          <button data-rewrite hidden>✨ Rewrite with Claude</button>
+          <button data-copy="prompt" class="noai" title="Paste into Claude for a sharper rewrite">Copy prompt for Claude</button>
         </div>
+        <div class="hint" data-ai></div>
         <h4 style="margin-top:14px">LinkedIn connection note <span class="hint" data-count></span></h4>
         <textarea class="note" data-f="note"></textarea>
         <div class="actions"><button data-copy="note">Copy note</button></div>
@@ -176,47 +194,66 @@ function card(j, i) {
 
 function wire(el, j, s) {
   const $ = q => el.querySelector(q);
-  const body = $('[data-f=body]'), note = $('[data-f=note]');
-  if (!s.body) body.value = fill(j.drafts.body, s.first);
+  const body = $('[data-f=body]'), note = $('[data-f=note]'), subject = $('[data-f=subject]');
+  body.value = s.body || fill(j.drafts.body, s.first);
   note.value = s.note || fill(j.drafts.linkedin_note, s.first);
+  if (sample) { $('[data-rewrite]').hidden = false; $('.noai').hidden = true; }
+  const gm = () => {
+    $('[data-gmail]').href = 'https://mail.google.com/mail/?view=cm&fs=1' + (s.to ? '&to=' + encodeURIComponent(s.to) : '') +
+      '&su=' + encodeURIComponent(subject.value) + '&body=' + encodeURIComponent(body.value);
+    $('[data-mailto]').href = 'mailto:' + encodeURIComponent(s.to || '') + '?subject=' + encodeURIComponent(subject.value) +
+      '&body=' + encodeURIComponent(body.value);
+  };
   const refresh = () => {
     const g = guesses(s.first, s.last, s.domain || j.contacts.domain);
-    $('.guesses').innerHTML = g.length ? '<div class="hint" style="margin-top:6px">Likely addresses — <b>unverified guesses</b>. First.last@ is the most common format. Click one to use it:</div>' +
+    $('.guesses').innerHTML = g.length ? '<div class="hint" style="margin-top:6px">Likely addresses — <b>unverified guesses</b>. First.last@ is the most common format. Tap one to use it:</div>' +
       g.map(x => `<div class="guess"><a href="#" data-use="${esc(x)}">${esc(x)}</a></div>`).join('') : '';
-    $('.guesses').querySelectorAll('[data-use]').forEach(a => a.onclick = e => { e.preventDefault(); s.to = a.dataset.use; $('[data-f=to]').value = s.to; save(); gm(); });
+    $('.guesses').querySelectorAll('[data-use]').forEach(a => a.onclick = e => { e.preventDefault(); s.to = a.dataset.use; $('[data-f=to]').value = s.to; save(j); gm(); });
     $('[data-count]').textContent = `(${note.value.length}/300)`;
     gm();
   };
-  const gm = () => {
-    const subj = $('[data-f=subject]').value;
-    $('[data-gmail]').href = 'https://mail.google.com/mail/?view=cm&fs=1' + (s.to ? '&to=' + encodeURIComponent(s.to) : '') +
-      '&su=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body.value);
-    $('[data-mailto]').href = 'mailto:' + encodeURIComponent(s.to || '') + '?subject=' + encodeURIComponent(subj) +
-      '&body=' + encodeURIComponent(body.value);
-  };
   el.querySelectorAll('input[data-f]').forEach(inp => inp.oninput = () => {
     const f = inp.dataset.f, oldFirst = s.first;
-    s[f] = inp.value.trim();
+    s[f] = f === 'subject' ? inp.value : inp.value.trim();
     if (f === 'first') {
       if (!s.body) body.value = fill(j.drafts.body, s.first);
-      else body.value = body.value.replace(new RegExp('^Hi ' + (oldFirst || 'there') + ','), 'Hi ' + (s.first || 'there') + ',');
+      else { body.value = body.value.replace(new RegExp('^Hi ' + (oldFirst || 'there') + ','), 'Hi ' + (s.first || 'there') + ','); s.body = body.value; }
       if (!s.note) note.value = fill(j.drafts.linkedin_note, s.first);
     }
-    save(); refresh();
+    save(j); refresh();
   });
-  body.oninput = () => { s.body = body.value; save(); gm(); };
-  note.oninput = () => { s.note = note.value; save(); refresh(); };
+  body.oninput = () => { s.body = body.value; save(j); gm(); };
+  note.oninput = () => { s.note = note.value; save(j); refresh(); };
   el.querySelectorAll('[data-status]').forEach(b => b.onclick = () => {
-    s.status = b.dataset.status; save();
+    s.status = b.dataset.status; save(j);
     el.querySelectorAll('[data-status]').forEach(x => x.classList.toggle('on', x === b));
     el.classList.toggle('done', s.status !== 'todo');
   });
   el.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => {
     const w = b.dataset.copy;
-    copy(w === 'subject' ? $('[data-f=subject]').value : w === 'body' ? body.value : w === 'note' ? note.value
+    copy(w === 'subject' ? subject.value : w === 'body' ? body.value : w === 'note' ? note.value
       : fill(j.drafts.claude_prompt, s.first), b);
   });
-  $('details.more').ontoggle = e => { s.open = e.target.open; save(); };
+  $('[data-rewrite]').onclick = async () => {
+    const btn = $('[data-rewrite]'), out = $('[data-ai]');
+    btn.disabled = true; out.textContent = 'Claude is rewriting…';
+    try {
+      const prompt = fill(j.drafts.rewrite_prompt, s.first) + '\n\nCURRENT DRAFT (keep any facts I added):\n' + body.value;
+      const r = await sample.json(prompt);
+      if (r && r.body) {
+        body.value = r.body; s.body = r.body;
+        if (r.subject) { subject.value = r.subject; s.subject = r.subject; }
+        if (r.linkedin_note) { note.value = r.linkedin_note.slice(0, 300); s.note = note.value; }
+        save(j); refresh();
+        out.innerHTML = (r.gaps && r.gaps.length) ? '<b>Prepare for:</b> ' + r.gaps.map(esc).join(' · ') : 'Rewritten ✓';
+      } else out.textContent = 'Claude returned nothing usable — your draft is unchanged.';
+    } catch (e) {
+      out.textContent = e && e.code === 'rate_limited' ? 'Claude is busy — try again in a minute.' :
+        e && e.code === 'not_granted' ? 'Claude access was declined for this page.' : 'Rewrite failed — your draft is unchanged.';
+    }
+    btn.disabled = false;
+  };
+  $('details.more').ontoggle = e => { s.open = e.target.open; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (x) {} };
   refresh();
 }
 
@@ -226,26 +263,97 @@ function render() {
   const show = new Set([...document.querySelectorAll('[data-show]:checked')].map(x => x.dataset.show));
   const hideDone = document.getElementById('hideDone').checked;
   const sort = document.getElementById('sort').value;
-  let jobs = DATA.jobs.map((j, i) => [j, i]).filter(([j]) => show.has(j.eligibility)
+  let jobs = DATA.jobs.filter(j => show.has(j.eligibility)
     && (!hideDone || !(state[j.key] && state[j.key].status && state[j.key].status !== 'todo'))
     && (!qv || (j.title + ' ' + j.company + ' ' + j.location).toLowerCase().includes(qv)));
   const rank = {ELIGIBLE: 0, LIKELY: 1, CHECK: 2};
-  jobs.sort(([a], [b]) => sort === 'date' ? (b.posted || '').localeCompare(a.posted || '')
+  jobs.sort((a, b) => sort === 'date' ? (b.posted || '').localeCompare(a.posted || '')
     : sort === 'fit' ? b.fit_score - a.fit_score
     : (rank[a.eligibility] - rank[b.eligibility]) || (b.fit_score - a.fit_score));
   list.innerHTML = '';
   if (!jobs.length) list.innerHTML = '<div class="empty">Nothing matches these filters.</div>';
-  jobs.forEach(([j, i]) => list.appendChild(card(j, i)));
+  jobs.forEach(j => list.appendChild(card(j)));
   document.getElementById('count').textContent = jobs.length + ' shown';
 }
+
+function applyRemote(snap) {
+  snap.docChanges().forEach(ch => {
+    if (ch.doc.metadata && ch.doc.metadata.hasPendingWrites) return;
+    const d = ch.doc.data(); const j = byId[ch.doc.id];
+    if (!d || !j) return;
+    const local = state[j.key];
+    if (local && local.updatedAt && d.updatedAt && local.updatedAt > d.updatedAt) return;
+    state[j.key] = Object.assign({}, d, {open: local && local.open});
+    const el = document.querySelector('.card[data-id="' + ch.doc.id + '"]');
+    if (el && !el.contains(document.activeElement)) el.replaceWith(card(j));
+  });
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+function settingsForm(cfg) {
+  const f = document.getElementById('settings');
+  f.floor.value = cfg.min_salary_usd; f.days.value = cfg.max_age_days;
+  f.terms.value = (cfg.search_terms || []).join('\n');
+}
+function readSettingsForm() {
+  const f = document.getElementById('settings');
+  return {min_salary_usd: Math.max(0, parseInt(f.floor.value, 10) || 0), max_age_days: Math.max(1, parseInt(f.days.value, 10) || 21),
+          search_terms: f.terms.value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 30)};
+}
+
 ['q', 'hideDone', 'sort'].forEach(id => document.getElementById(id).addEventListener('input', render));
 document.querySelectorAll('[data-show]').forEach(x => x.addEventListener('change', render));
+settingsForm(DATA.settings);
 render();
+
+(async () => {
+  if (!window.claude || !window.claude.use) { setSync('Saved on this device'); return; }
+  const [d, s, m] = await Promise.all(['db', 'sample', 'mcp'].map(n => window.claude.use(n).catch(() => null)));
+  sample = s; mcp = m;
+  if (sample) document.querySelectorAll('.card').forEach(el => { const j = byId[el.dataset.id]; if (j) el.replaceWith(card(j)); });
+  if (d) {
+    db = d;
+    setSync('Syncing…');
+    const timer = setTimeout(() => setSync('Sync is slow — changes are saved on this device'), 10000);
+    db.collection('state').onSnapshot(snap => { clearTimeout(timer); setSync('Synced across your devices'); applyRemote(snap); },
+      err => { clearTimeout(timer); setSync('Sync unavailable (' + ((err && err.code) || 'error') + ') — saved on this device'); });
+    db.doc('config/settings').get().then(doc => { if (doc.exists) settingsForm(Object.assign({}, DATA.settings, doc.data())); }).catch(() => {});
+    const form = document.getElementById('settings');
+    form.querySelector('button').disabled = false;
+    form.onsubmit = e => {
+      e.preventDefault();
+      const msg = document.getElementById('settingsMsg');
+      db.doc('config/settings').set(readSettingsForm())
+        .then(() => { msg.textContent = 'Saved — used from the next search run.'; })
+        .catch(err => { msg.textContent = 'Could not save (' + ((err && err.code) || 'error') + ').'; });
+    };
+  } else setSync('Saved on this device');
+  const run = document.getElementById('runNow');
+  if (mcp && DATA.trigger_id) {
+    run.hidden = false;
+    run.onclick = async () => {
+      const msg = document.getElementById('runMsg');
+      run.disabled = true; msg.textContent = 'Starting a fresh search…';
+      try {
+        await mcp.callTool('Claude Code Remote', 'fire_trigger', {trigger_id: DATA.trigger_id});
+        msg.textContent = 'Started. Reload this page in about 10–15 minutes for the new list.';
+      } catch (e) {
+        const c = e && e.code;
+        msg.textContent = c === 'consent_required' || c === 'not_granted' ? 'Allow the Claude Code connector for this page to use this button.' :
+          c === 'server_not_connected' || c === 'not_in_manifest' || c === 'blocked_by_policy' ? 'This button isn\'t available here — the daily run still happens automatically.' :
+          'Couldn\'t start it right now (' + (c || 'error') + '). The daily run still happens automatically.';
+        run.disabled = false;
+      }
+    };
+  }
+})();
 """
 
 
-def render_report(path, jobs, summary, settings):
-    data = {"jobs": jobs, "summary": summary}
+def render_report(path, jobs, summary, settings, trigger_id=""):
+    data = {"jobs": jobs, "summary": summary, "trigger_id": trigger_id, "settings": {
+        "min_salary_usd": settings["min_salary_usd"], "max_age_days": settings["max_age_days"],
+        "search_terms": settings["search_terms"]}}
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     gen = datetime.now(timezone.utc).astimezone().strftime("%a %d %b %Y, %H:%M")
     counts = summary["counts"]
@@ -265,10 +373,18 @@ def render_report(path, jobs, summary, settings):
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Job Hunt</title><style>{CSS}</style></head>
 <body><div class="wrap">
 <h1>Job Hunt</h1>
-<p class="sub">Generated {gen} · pay floor ${settings['min_salary_usd']:,}/yr · postings from the last {settings['max_age_days']} days</p>
+<p class="sub">Updated {gen} · pay floor ${settings['min_salary_usd']:,}/yr · postings from the last {settings['max_age_days']} days · <span id="sync"></span></p>
+<div class="actions" style="margin:-6px 0 14px"><button id="runNow" class="btn primary" hidden>Run a fresh search now</button><span class="hint" id="runMsg"></span></div>
 <div class="stats">{stats}</div>
 {warn}
 <details class="panel"><summary>Also do these by hand (sites that can't be pulled automatically)</summary><div class="manual">{manual}</div></details>
+<details class="panel"><summary>Search settings</summary>
+<form id="settings" class="settings">
+  <label>Pay floor (USD / year)<input name="floor" type="number" min="0" step="5000"></label>
+  <label>Only postings from the last N days<input name="days" type="number" min="1" max="60"></label>
+  <label>Search terms (one per line)<textarea name="terms" rows="6"></textarea></label>
+  <div class="actions"><button type="submit" disabled>Save settings</button><span class="hint" id="settingsMsg">Saving works on the published page.</span></div>
+</form></details>
 <details class="panel"><summary>Why jobs were ruled out ({summary['rejected']})</summary><ul>{reasons}</ul></details>
 <div class="bar">
   <input id="q" type="search" placeholder="Filter by title, company, location…">
@@ -280,7 +396,7 @@ def render_report(path, jobs, summary, settings):
   <span class="hint" id="count"></span>
 </div>
 <div id="list"></div>
-<p class="hint">Statuses, names and edited drafts are saved in this browser. Job listings come from Himalayas, Remotive, RemoteOK, Jobicy, Working Nomads, We Work Remotely, Amazon Jobs and company career boards; each card links back to the original posting.</p>
+<p class="hint">Statuses, names and edited drafts sync across your devices on the published page (and are saved in this browser when opened as a file). Job listings come from Himalayas, Remotive, RemoteOK, Jobicy, Working Nomads, We Work Remotely, Amazon Jobs and company career boards; each card links back to the original posting.</p>
 </div>
 <script id="data" type="application/json">{blob}</script>
 <script>{JS}</script>

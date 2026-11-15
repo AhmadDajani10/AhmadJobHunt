@@ -79,7 +79,8 @@ def build_drafts(job, profile):
         note = (f"Hi {PLACEHOLDER}, I'm applying for {title[:60]} at {company[:40]}. Principal BI Data Engineer "
                 f"(Azure/SQL/Python), based in Amman. Would love to connect.")
     prompt = claude_prompt(job, profile)
-    return {"subject": subject, "body": body, "linkedin_note": note, "claude_prompt": prompt, "first": first}
+    return {"subject": subject, "body": body, "linkedin_note": note, "claude_prompt": prompt,
+            "rewrite_prompt": rewrite_prompt(job, profile, sig), "first": first}
 
 
 def claude_prompt(job, profile):
@@ -104,4 +105,28 @@ Location: {job.location}
 Link: {job.url}
 
 {desc}
+"""
+
+
+def rewrite_prompt(job, profile, signature):
+    return f"""Rewrite my cold email to the recruiter or hiring manager for this job so it is sharper and more specific.
+
+Return ONLY a JSON object with these keys:
+  "subject": a short subject line,
+  "body": the email body, under 150 words before the signature, starting "Hi {PLACEHOLDER}," and ending with this exact signature:
+{signature}
+  "linkedin_note": a LinkedIn connection note under 280 characters starting "Hi {PLACEHOLDER},",
+  "gaps": a list of up to 3 short phrases naming requirements in the posting I don't clearly meet.
+
+Rules: plain and confident, no buzzwords or flattery. Pick the 2 results from my resume that best match what this posting asks for and keep their real numbers. Say plainly that I'm a US and Jordanian citizen living in Amman, Jordan (UTC+3) and how my hours overlap with their team; offer contractor or employer-of-record if they're outside Jordan. Ask for a short call. Never invent experience.
+
+MY RESUME
+{profile['resume_text']}
+
+THE JOB
+Title: {job.title}
+Company: {job.company}
+Location: {job.location}
+
+{job.description[:6000]}
 """

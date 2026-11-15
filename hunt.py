@@ -5,9 +5,11 @@ Options:
   --refresh     ignore the 6-hour cache and re-download everything
   --no-open     don't open the browser at the end
   --days N      only keep postings from the last N days (default from config/settings.json)
+  --overrides F JSON file whose keys override config/settings.json (the web page's saved settings)
 """
 import argparse
 import csv
+import hashlib
 import json
 import sys
 import time
@@ -39,7 +41,7 @@ def load_private():
     path = CONFIG / "private.json"
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
-    info = {"email": "", "phone": "", "linkedin": ""}
+    info = {"email": "", "phone": "", "linkedin": "", "trigger_id": ""}
     if sys.stdin.isatty():
         log("\nFirst run: a few details for your email signature (saved only on this computer, never uploaded).")
         info["email"] = input("  Your email: ").strip()
@@ -60,8 +62,15 @@ def run(args, fetcher=None, open_browser=True):
     profile = json.loads((CONFIG / "profile.json").read_text(encoding="utf-8"))
     private = load_private()
     profile["signature_line"] = " · ".join(x for x in (private.get("email"), private.get("phone"), private.get("linkedin")) if x)
+    if getattr(args, "overrides", None) and Path(args.overrides).exists():
+        over = json.loads(Path(args.overrides).read_text(encoding="utf-8"))
+        for k in ("min_salary_usd", "max_age_days", "search_terms"):
+            if over.get(k):
+                settings[k] = over[k]
+        log(f"  using settings saved on the web page: {', '.join(k for k in over if over.get(k))}")
     if args.days:
         settings["max_age_days"] = args.days
+    settings.setdefault("alert_jobs_file", str(DATA / "alert_jobs.json"))
     fetcher = fetcher or Fetcher(ROOT / ".cache", settings.get("cache_hours", 6), refresh=args.refresh)
 
     # 1. collect
@@ -120,14 +129,17 @@ def run(args, fetcher=None, open_browser=True):
     # 4. new-vs-seen tracking
     DATA.mkdir(exist_ok=True)
     seen_path = DATA / "seen.json"
-    seen = json.loads(seen_path.read_text()) if seen_path.exists() else {}
+    has_memory = seen_path.exists()
+    seen = json.loads(seen_path.read_text()) if has_memory else {}
     today = datetime.now().strftime("%Y-%m-%d")
+    recent = datetime.now(timezone.utc) - timedelta(hours=48)
     out = []
     for j in kept:
-        is_new = j.key not in seen
+        # with run-to-run memory: never seen before. Without it (fresh cloud run): posted in the last 2 days.
+        is_new = (j.key not in seen) if has_memory else bool(j.posted and j.posted >= recent)
         seen.setdefault(j.key, today)
         out.append({
-            "key": j.key, "title": j.title, "company": j.company, "url": j.url, "source": j.source,
+            "id": hashlib.sha1(j.key.encode()).hexdigest()[:16], "key": j.key, "title": j.title, "company": j.company, "url": j.url, "source": j.source,
             "location": j.location, "posted": j.posted.isoformat() if j.posted else None,
             "eligibility": j.eligibility, "eligibility_reason": j.eligibility_reason,
             "eligibility_evidence": j.eligibility_evidence, "salary_note": j.salary_note,
@@ -148,7 +160,7 @@ def run(args, fetcher=None, open_browser=True):
     }
     OUT.mkdir(exist_ok=True)
     report = OUT / "report.html"
-    render_report(report, out, summary, settings)
+    render_report(report, out, summary, settings, trigger_id=private.get("trigger_id", ""))
     with open(OUT / "jobs.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["eligibility", "fit", "title", "company", "location", "salary", "posted", "first_seen", "url", "why"])
@@ -174,6 +186,7 @@ def main():
     p.add_argument("--refresh", action="store_true")
     p.add_argument("--no-open", action="store_true")
     p.add_argument("--days", type=int)
+    p.add_argument("--overrides")
     args = p.parse_args()
     log("Searching job sources…")
     run(args)

@@ -10,7 +10,7 @@ from pathlib import Path
 
 USER_AGENT = "Mozilla/5.0 (compatible; AhmadJobHunt/1.0; personal job search)"
 # Seconds to wait between live requests to the same site (sites that rate-limit hard).
-MIN_INTERVAL = {"himalayas.app": 6.0}
+MIN_INTERVAL = {"himalayas.app": 10.0}
 
 
 class FetchError(Exception):
