@@ -1,0 +1,8 @@
+# personal / generated - never commit
+config/private.json
+output/
+data/
+.cache/
+__pycache__/
+*.pyc
+.DS_Store

@@ -1,0 +1,30 @@
+{
+  "_note": "Resume facts used to write drafts. Your email/phone/LinkedIn live in config/private.json, which is never committed.",
+  "name": "Ahmad Dajani",
+  "current_title": "Principal BI Data Engineer",
+  "headline_short": "Principal BI Data Engineer (Azure/SQL/Python), remote from Amman",
+  "years_experience": 6,
+
+  "achievements": [
+    {"keywords": ["pipeline", "etl", "elt", "integration", "data factory", "adf", "ssis", "ingest", "data engineer", "orchestrat"],
+     "text": "Architected and maintain 400+ production data integrations across Azure Data Factory, SSIS, Logic Apps and Python, and personally built 250+ of the pipelines, from near-real-time scripts to multi-million-row batch loads."},
+    {"keywords": ["reliab", "monitor", "observab", "data quality", "platform", "infrastructure", "document", "modern", "migrat", "incident"],
+     "text": "Rebuilt an undocumented, failure-prone data platform spanning 18 facilities into a production-grade system with logging, error handling, monitoring and documentation standards."},
+    {"keywords": ["power apps", "power automate", "power platform", "low-code", "low code", "workflow", "app", "process automation", "sharepoint"],
+     "text": "Built 6+ Power Platform apps that digitized manual operations workflows, including an emergency parts-procurement system and an SLA-tracked request system with audit trails and automated routing."},
+    {"keywords": ["cost", "finops", "optimi", "budget", "cloud", "license", "efficien"],
+     "text": "Audited our BI cloud and subscription stack and cut ~$60K a year (80%) with zero disruption to production."},
+    {"keywords": ["power bi", "tableau", "dashboard", "report", "bi ", "business intelligence", "visuali", "dax", "ssrs", "kpi", "stakeholder"],
+     "text": "Run BI for a multi-facility logistics and manufacturing operation on Power BI, SSRS and Tableau (certified), on top of pipelines I built."},
+    {"keywords": ["complian", "regulat", "health", "clinical", "hipaa", "government", "public sector", "audit", "secure", "sftp"],
+     "text": "Built automated ETL (SAS, Oracle SQL, VBA over encrypted SFTP) that achieved 100% federal compliance for COVID-19 reporting to the CDC, FDA and state health departments."},
+    {"keywords": ["automat", "scal", "throughput", "manual", "process improvement", "vba", "excel"],
+     "text": "Automated state reporting workflows, raising throughput from 4 to 28 reports an hour (7x) and eliminating manual data entry at peak demand."},
+    {"keywords": ["machine learning", "ml", "computer vision", "ai", "model", "dataset", "data science"],
+     "text": "Built data pipelines and curated image datasets for a computer-vision defect-detection model in manufacturing."},
+    {"keywords": ["python", "devops", "release", "ci/cd", "deploy", "software"],
+     "text": "Wrote a Python scheduling package at Fannie Mae that flags collisions in DevOps patch releases; it's still in production use."}
+  ],
+
+  "resume_text": "AHMAD DAJANI — Principal Business Intelligence Data Engineer. US and Jordanian citizen, based in Amman, Jordan (UTC+3).\nSKILLS: SQL, Python, Azure (Data Factory, Logic Apps, ML Studio), Power Platform (Power BI, Power Apps, Power Automate), SSIS, SSRS, Tableau, SAS, Oracle, VBA, DAX. Certifications: Tableau Desktop Specialist, AWS Cloud Practitioner.\n\nComprehensive Logistics LLC (Remote, US) — Principal Business Intelligence Data Engineer, Oct 2021–present\n- Architected and maintain 400+ production data integrations across Azure Data Factory, SSIS, Logic Apps, Power Automate, and Python; personally built 250+ pipelines from near-real-time micro-scripts to batch processes handling millions of rows.\n- Rebuilt inherited data infrastructure across 18 facilities from an undocumented, failure-prone system into a production-grade platform with logging, error handling, monitoring, and documentation standards.\n- Developed 6+ Power Platform applications digitizing manual workflows (emergency parts procurement, BI request tracking with SLA monitoring, audit trails, automated routing).\n- Audited BI cloud and subscription infrastructure, cutting annual spend ~$60K (80%) with zero disruption.\n- Contributed to a computer-vision ML project for manufacturing defect detection (data pipelines, dataset curation, model training support).\n- Co-led Agile adoption across the BI team.\n\nBiocerna LLC / Matrix Medical — Data Analyst & IT Support, Jul 2020–Oct 2021\n- Prevented a $2M contract loss by diagnosing a vendor LMS failure within hours and coordinating an emergency reset.\n- Led a team of 3 to fix outdated RNA-threshold logic in an automated VBA workflow, eliminating hundreds of recurring reporting errors.\n- Achieved 100% federal compliance for COVID-19 reporting (CARES Act) with automated ETL in SAS, Oracle SQL and VBA over encrypted SFTP to state health departments, CDC and FDA.\n- Automated state reporting workflows from 4 to 28 reports/hour.\n- Managed local IT support (20+ tickets/day) during an acquisition.\n\nFannie Mae — Project Analyst Intern, Jun–Aug 2019\n- Built a Python interval-scheduling package for DevOps patch release management (still in production).\n\nEDUCATION: B.S. Information Systems; Operations Management & Business Analytics, University of Maryland, College Park (2020). A.A., Chesapeake College (2017)."
+}

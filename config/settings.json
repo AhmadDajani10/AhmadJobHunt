@@ -1,0 +1,41 @@
+{
+  "min_salary_usd": 80000,
+  "max_age_days": 21,
+  "cache_hours": 6,
+  "show_statuses": ["ELIGIBLE", "LIKELY", "CHECK"],
+  "min_fit_score": 30,
+
+  "search_terms": [
+    "data engineer",
+    "analytics engineer",
+    "business intelligence",
+    "bi developer",
+    "power bi",
+    "power platform",
+    "etl developer",
+    "azure data",
+    "data integration",
+    "data analyst"
+  ],
+
+  "sources": {
+    "himalayas": true,
+    "remotive": true,
+    "remoteok": true,
+    "jobicy": true,
+    "workingnomads": true,
+    "weworkremotely": true,
+    "amazon_jordan": true,
+    "watchlist": true
+  },
+
+  "_watchlist_note": "Company career boards (Greenhouse / Lever / Ashby). Companies known for hiring remotely across many countries. Boards that don't load are listed after each run so you can prune them. To add a company, find its careers page: boards.greenhouse.io/NAME, jobs.lever.co/NAME, or jobs.ashbyhq.com/NAME, and add NAME to the right list.",
+  "watchlist": {
+    "greenhouse": ["gitlab", "canonical", "wikimedia", "mozilla", "grafanalabs", "elastic", "dbtlabsinc",
+                   "remotecom", "duckduckgo", "brave", "clickhouse", "careem", "talabat", "datadog",
+                   "cloudflare", "okta", "twilio", "hashicorp", "airtable", "coinbase"],
+    "lever": ["binance", "kraken", "toggl", "xteam", "aircall", "wolt", "bolt"],
+    "ashby": ["posthog", "supabase", "deel", "zapier", "airbyte", "doist", "linear", "vercel", "hightouch",
+              "prefect", "dagster", "astronomer", "sourcegraph", "omnipresent", "multiverse", "oyster"]
+  }
+}
