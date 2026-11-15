@@ -157,6 +157,9 @@ def run(args, fetcher=None, open_browser=True):
         f"{counts.get('CHECK', 0)} to check ({summary['new']} new). Ruled out {summary['rejected']}.")
     if errors:
         log(f"{len(errors)} source(s) failed — see the top of the report.")
+    if any("CERTIFICATE_VERIFY_FAILED" in e for e in errors):
+        log("\n*** Mac fix: open Finder → Applications → your Python folder → double-click "
+            "'Install Certificates.command', then run this again. ***")
     log(f"\nReport: {report}")
     if open_browser and not args.no_open:
         webbrowser.open(report.as_uri())
