@@ -78,6 +78,9 @@ def run(args, fetcher=None, open_browser=True):
             log(f"  {name:<15} FAILED: {e}")
             errors.append(f"{name}: {e}")
 
+    if getattr(fetcher, "stale", None):
+        log(f"  ({len(fetcher.stale)} request(s) were refused, so older saved results were used for them)")
+
     # 2. recency + role fit + eligibility, then merge duplicates (the same job is often on
     #    several boards, and one company may post the same title for US and for EMEA).
     cutoff = datetime.now(timezone.utc) - timedelta(days=settings["max_age_days"])

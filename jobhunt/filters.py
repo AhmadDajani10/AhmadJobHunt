@@ -19,6 +19,9 @@ MEDIUM_TITLES = [
 EXCLUDE_TITLES = [
     r"\bintern(ship)?\b", r"\bstudent\b", r"recruit", r"account executive", r"\bsales\b(?!force)",
     r"marketing manager", r"customer success", r"\bnurse\b", r"teacher", r"tutor", r"\bphd\b",
+    r"full[- ]?stack", r"front[- ]?end", r"\bqa\b", r"quality assurance", r"\btest(ing)?\b",
+    r"product (manager|owner|designer)", r"\bdesigner\b", r"mechanical", r"electrical", r"\bcivil\b",
+    r"security engineer", r"privacy", r"compliance associate",
     r"\bfrench\b|\bgerman\b|\bjapanese\b|\bkorean\b|\bmandarin\b|\bdutch\b|\bitalian\b|\bspanish speaking\b",
 ]
 
@@ -81,7 +84,7 @@ def score_fit(job):
 JORDAN = r"\bjordan\b|\bamman\b|\birbid\b|\baqaba\b|\bzarqa\b"
 WORLDWIDE = r"worldwide|anywhere|\bglobal(ly)?\b|all countries|work from anywhere|any location|fully distributed|\bremote\s*\(?\s*global"
 REGION_OK = r"\bemea\b|\bmena\b|middle east|\bgcc\b|\barab\b|levant|europe,? middle east"
-REGION_MAYBE = r"\beurope\b|\beu\b|\bcet\b|\beet\b|\buk\b|\basia\b|\bapac\b|africa|\bgmt\b|\butc\s*[+-]"
+REGION_MAYBE = r"\beurope\b|\beu\b|\bcet\b|\beet\b|\basia\b|\bapac\b|africa|\bgmt\b|\butc\s*[+-]"
 HIRE_ANYWHERE_HINTS = (
     r"(via|through|using) (deel|remote\.com|oyster|rippling|papaya|velocity global|an? employer of record|an? eor)",
     r"employer of record", r"we hire (in|across) (over |more than )?\d+ countries", r"hire (talent )?globally",
@@ -102,7 +105,7 @@ US_LOC = (r"\bus\b|\busa\b|u\.s\.|united states|america|\bcanada\b|\blatam\b|lat
           r"\b(ak|az|ca|ct|dc|fl|ga|il|ky|md|mn|nc|nj|ny|oh|pa|tn|tx|ut|va|wa|wi)\b")
 OTHER_COUNTRIES = (
     r"germany|france|spain|portugal|italy|netherlands|poland|romania|ukraine|ireland|united kingdom|"
-    r"england|london|berlin|sweden|norway|denmark|finland|switzerland|austria|belgium|czech|hungary|"
+    r"\buk\b|england|london|berlin|sweden|norway|denmark|finland|switzerland|austria|belgium|czech|hungary|"
     r"greece|turkey|israel|india|pakistan|bangladesh|philippines|indonesia|vietnam|thailand|malaysia|"
     r"singapore|japan|korea|china|taiwan|hong kong|australia|new zealand|brazil|mexico|argentina|"
     r"colombia|chile|peru|south africa|nigeria|kenya|egypt|morocco|tunisia|uae|dubai|abu dhabi|"
@@ -113,6 +116,23 @@ REGION_WORDS = {
     "EMEA": r"\bemea\b|europe|\beu\b|\buk\b|united kingdom|london|berlin|germany|france|spain|netherlands|"
             r"poland|ireland|portugal|\bcet\b|\beet\b",
 }
+
+
+TZ_BASE = {"utc": 0, "gmt": 0, "cet": 1, "cest": 2, "eet": 2, "eest": 3, "est": -5, "et": -5, "pst": -8}
+
+
+def tz_window_includes_jordan(text):
+    """True/False if a time-zone window like 'CET +/- 3 hours' or 'UTC-1 to UTC+3' is stated, else None."""
+    t = text.lower()
+    m = re.search(r"\b(utc|gmt|cest|cet|eest|eet|est|et|pst)\s*\(?\s*(?:\+/-|±|\+-)\s*(\d+(?:\.\d+)?)", t)
+    if m:
+        base = TZ_BASE[m.group(1)]
+        return base - float(m.group(2)) <= 3 <= base + float(m.group(2))
+    m = re.search(r"(?:utc|gmt)\s*([+-]\s*\d+)\s*(?:to|-|–|and)\s*(?:utc|gmt)?\s*([+-]\s*\d+)", t)
+    if m:
+        lo, hi = sorted(float(x.replace(" ", "")) for x in m.groups())
+        return lo <= 3 <= hi
+    return None
 
 
 def _find(pattern, text):
@@ -175,6 +195,11 @@ def classify_location(job):
         return set_("ELIGIBLE", "Open worldwide", job.location)
     if re.search(REGION_OK, loc):
         return set_("LIKELY", "Open to a region that includes Jordan", job.location)
+    tz = tz_window_includes_jordan(loc)
+    if tz is True and not res:
+        return set_("LIKELY", "Time-zone window includes Jordan (UTC+3)", job.location)
+    if tz is False:
+        return set_("REJECT", f"Time-zone window excludes Jordan: {job.location}", job.location)
     if res:
         return set_("REJECT", "Requires living in the US", _find(res, desc + " " + loc))
     if re.search(US_LOC, loc) and not re.search(REGION_MAYBE, loc):

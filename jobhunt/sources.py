@@ -23,29 +23,24 @@ def _list(v):
 
 # ---------------------------------------------------------------- Himalayas
 def himalayas(fetcher, settings, log):
-    """himalayas.app: remote jobs with structured country restrictions ([] = worldwide)."""
+    """himalayas.app search, filtered server-side to jobs that can be done from Jordan (country=JO).
+    Rate-limited, so requests are paced; results are cached for a few hours."""
     raw = []
-    used_search = False
-    for term in settings["search_terms"]:
-        url = f"https://himalayas.app/jobs/api/search?q={q(term)}&sort=recent"
-        try:
-            data = fetcher.get_json(url)
-            jobs = data.get("jobs") if isinstance(data, dict) else None
-            if jobs is None:
-                break
-            raw.extend(jobs)
-            used_search = True
-        except FetchError:
-            break
-    if not used_search:
-        # Fall back to paging the general feed (most recent first).
-        for page in range(settings.get("himalayas_max_pages", 25)):
-            data = fetcher.get_json(f"https://himalayas.app/jobs/api?limit=20&offset={page * 20}")
-            jobs = data.get("jobs") or []
-            if not jobs:
-                break
-            raw.extend(jobs)
-            time.sleep(0.3)
+    pages = settings.get("himalayas_pages", 2)
+    terms = settings.get("himalayas_terms") or settings["search_terms"]
+    try:
+        for term in terms:
+            for page in range(1, pages + 1):
+                data = fetcher.get_json(
+                    f"https://himalayas.app/jobs/api/search?q={urllib.parse.quote(term)}&country=JO&page={page}")
+                jobs = data.get("jobs") or []
+                raw.extend(jobs)
+                if len(jobs) < 20:
+                    break
+    except FetchError as e:
+        if not raw:
+            raise
+        log(f"  himalayas: stopped early ({e}); keeping the {len(raw)} postings already fetched")
     out = []
     for j in raw:
         restr = j.get("locationRestrictions")
@@ -64,7 +59,8 @@ def himalayas(fetcher, settings, log):
             salary_min=to_float(j.get("minSalary")),
             salary_max=to_float(j.get("maxSalary")),
             salary_currency=j.get("currency") or "USD",
-            salary_period="year",
+            salary_period={"hourly": "hour", "monthly": "month", "weekly": "week", "daily": "day"}.get(
+                (j.get("salaryPeriod") or "").lower(), "year"),
             job_type=j.get("employmentType") or "",
             tags=_list(j.get("categories")),
         ))

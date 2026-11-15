@@ -4,10 +4,13 @@ import hashlib
 import json
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 USER_AGENT = "Mozilla/5.0 (compatible; AhmadJobHunt/1.0; personal job search)"
+# Seconds to wait between live requests to the same site (sites that rate-limit hard).
+MIN_INTERVAL = {"himalayas.app": 6.0}
 
 
 class FetchError(Exception):
@@ -24,6 +27,16 @@ class Fetcher:
         self.ttl = cache_hours * 3600
         self.refresh = refresh
         self.timeout = timeout
+        self._last = {}
+        self.stale = []  # URLs served from an expired cache because the live fetch failed
+
+    def _pace(self, url):
+        host = urllib.parse.urlparse(url).netloc
+        gap = MIN_INTERVAL.get(host, 0)
+        wait = self._last.get(host, 0) + gap - time.time()
+        if wait > 0:
+            time.sleep(wait)
+        self._last[host] = time.time()
 
     def _cache_path(self, url):
         return self.cache_dir / (hashlib.sha1(url.encode()).hexdigest() + ".cache")
@@ -38,7 +51,8 @@ class Fetcher:
             "Accept-Encoding": "gzip",
         })
         last = None
-        for attempt in range(2):
+        for attempt in range(4):
+            self._pace(url)
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     raw = resp.read()
@@ -51,9 +65,24 @@ class Fetcher:
                 if e.code in (404, 410, 401, 403):
                     raise FetchError(url, e.code, "not available")
                 last = FetchError(url, e.code, str(e.reason))
+                if e.code == 429:  # rate limited
+                    try:
+                        delay = float(e.headers.get("Retry-After") or 0) or 15 * (attempt + 1)
+                    except ValueError:
+                        delay = 15 * (attempt + 1)
+                    if delay > 60:  # long lockout: don't sit and wait, use what we have
+                        last = FetchError(url, 429, f"rate limited, try again in ~{delay / 60:.0f} min")
+                        break
+                    time.sleep(delay)
+                    continue
             except Exception as e:  # network errors, timeouts
                 last = FetchError(url, None, str(e))
-            time.sleep(1.5 * (attempt + 1))
+            if attempt >= 1:
+                break
+            time.sleep(2)
+        if path.exists():  # live fetch failed: fall back to the last saved copy, however old
+            self.stale.append(url)
+            return path.read_text(encoding="utf-8")
         raise last
 
     def get_json(self, url):

@@ -33,14 +33,17 @@ CSS = r"""
 :root{--bg:#f6f7f9;--card:#fff;--ink:#14171c;--muted:#5d6673;--line:#e3e6ea;--accent:#2f5bd3;
 --ok:#1f7a4d;--ok-bg:#e3f4ea;--likely:#126b78;--likely-bg:#e0f2f4;--check:#8a5a00;--check-bg:#fbf0d9;
 --chip:#eef1f5;--gap:#9b2c2c;--gap-bg:#fbe7e7;--new:#6b3fd1;--code:#f2f4f7}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#171a20;--ink:#e7e9ee;--muted:#9aa3af;--line:#2a2f38;
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1115;--card:#171a20;--ink:#e7e9ee;--muted:#9aa3af;--line:#2a2f38;
 --accent:#7aa2ff;--ok:#5fd39a;--ok-bg:#163126;--likely:#5cc8d6;--likely-bg:#12303a;--check:#f2c063;--check-bg:#352a12;
 --chip:#232832;--gap:#ff9b9b;--gap-bg:#3a1c1f;--new:#b59bff;--code:#1d2129}}
+:root[data-theme="dark"]{--bg:#0f1115;--card:#171a20;--ink:#e7e9ee;--muted:#9aa3af;--line:#2a2f38;
+--accent:#7aa2ff;--ok:#5fd39a;--ok-bg:#163126;--likely:#5cc8d6;--likely-bg:#12303a;--check:#f2c063;--check-bg:#352a12;
+--chip:#232832;--gap:#ff9b9b;--gap-bg:#3a1c1f;--new:#b59bff;--code:#1d2129}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 .wrap{max-width:1000px;margin:0 auto;padding:24px 16px 80px}
 h1{font-size:24px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 18px}
-.stats{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:120px}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
 .stat b{display:block;font-size:22px}.stat span{color:var(--muted);font-size:13px}
 details.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:16px}
 details.panel summary{cursor:pointer;font-weight:600}
@@ -55,6 +58,7 @@ details.panel summary{cursor:pointer;font-weight:600}
 .top{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
 .title{font-size:17px;font-weight:650;margin:0}.title a{color:inherit;text-decoration:none}.title a:hover{text-decoration:underline}
 .meta{color:var(--muted);font-size:14px;margin-top:2px}
+.top>div:first-child{min-width:0}.title{overflow-wrap:anywhere}
 .score{font-weight:700;font-size:20px;text-align:right}.score small{display:block;font-size:12px;color:var(--muted);font-weight:500}
 .badge{display:inline-block;font-size:12px;font-weight:650;border-radius:6px;padding:2px 8px;margin-right:6px}
 .ELIGIBLE{color:var(--ok);background:var(--ok-bg)}.LIKELY{color:var(--likely);background:var(--likely-bg)}.CHECK{color:var(--check);background:var(--check-bg)}
@@ -70,9 +74,10 @@ details.more{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 details.more summary{cursor:pointer;font-weight:600;font-size:14px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px}@media(max-width:720px){.grid{grid-template-columns:1fr}}
 h4{margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
-.links a{display:block;font-size:14px;margin:3px 0}
+.grid>div{min-width:0}
+.links a{display:block;font-size:14px;margin:3px 0;overflow-wrap:anywhere}
 .row{display:flex;gap:6px;margin:6px 0}.row input{flex:1;min-width:0;padding:7px 9px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:14px}
-.guess{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+.guess{overflow-wrap:anywhere;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;display:flex;justify-content:space-between;gap:8px;padding:3px 0}
 .hint{color:var(--muted);font-size:12px}
 textarea{width:100%;min-height:260px;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--code);color:var(--ink);font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
 textarea.note{min-height:90px}
@@ -155,6 +160,7 @@ function card(j, i) {
         <div class="actions">
           <button data-copy="body">Copy email</button>
           <a class="btn primary" data-gmail target="_blank" rel="noopener">Open in Gmail ↗</a>
+          <a class="btn" data-mailto>Email app</a>
           <button data-copy="prompt" title="Paste into Claude for a sharper rewrite">Copy prompt for Claude</button>
           <a class="btn" href="https://claude.ai/new" target="_blank" rel="noopener">claude.ai ↗</a>
         </div>
@@ -185,6 +191,8 @@ function wire(el, j, s) {
     const subj = $('[data-f=subject]').value;
     $('[data-gmail]').href = 'https://mail.google.com/mail/?view=cm&fs=1' + (s.to ? '&to=' + encodeURIComponent(s.to) : '') +
       '&su=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body.value);
+    $('[data-mailto]').href = 'mailto:' + encodeURIComponent(s.to || '') + '?subject=' + encodeURIComponent(subj) +
+      '&body=' + encodeURIComponent(body.value);
   };
   el.querySelectorAll('input[data-f]').forEach(inp => inp.oninput = () => {
     const f = inp.dataset.f, oldFirst = s.first;
