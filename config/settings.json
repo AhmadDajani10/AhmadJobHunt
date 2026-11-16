@@ -5,7 +5,7 @@
   "show_statuses": ["ELIGIBLE", "LIKELY", "CHECK"],
   "min_fit_score": 40,
   "himalayas_pages": 3,
-  "himalayas_terms": ["data engineer", "business intelligence", "power bi", "analytics engineer", "data analyst"],
+  "himalayas_terms": ["data engineer", "business intelligence", "power bi", "analytics engineer", "data analyst", "etl", "sql", "power platform"],
 
   "search_terms": [
     "data engineer",
@@ -28,8 +28,7 @@
     "workingnomads": true,
     "weworkremotely": true,
     "amazon_jordan": true,
-    "watchlist": true,
-    "alert_emails": true
+    "watchlist": true
   },
 
   "_watchlist_note": "Company career boards (Greenhouse / Lever / Ashby). Companies known for hiring remotely across many countries. Boards that don't load are listed after each run so you can prune them. To add a company, find its careers page: boards.greenhouse.io/NAME, jobs.lever.co/NAME, or jobs.ashbyhq.com/NAME, and add NAME to the right list.",

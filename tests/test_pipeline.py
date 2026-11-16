@@ -123,14 +123,7 @@ class PipelineTest(unittest.TestCase):
         hunt.OUT = Path(cls.tmp.name) / "output"
         hunt.DATA = Path(cls.tmp.name) / "data"
         hunt.log = lambda *a: None
-        hunt.DATA.mkdir(parents=True, exist_ok=True)
-        (hunt.DATA / "alert_jobs.json").write_text(json.dumps([
-            {"title": "Senior Data Engineer", "company": "Contoso", "location": "Jordan (Remote)",
-             "url": "https://www.linkedin.com/jobs/view/123", "source": "LinkedIn alert", "posted": ISO},
-            {"title": "Data Engineer", "company": "US Corp", "location": "United States (Remote)",
-             "url": "https://www.linkedin.com/jobs/view/456", "source": "LinkedIn alert", "posted": ISO},
-        ]))
-        cls.out, cls.summary = hunt.run(Namespace(refresh=False, no_open=True, days=None, overrides=None), fetcher=FakeFetcher(),
+        cls.out, cls.summary = hunt.run(Namespace(refresh=False, no_open=True, days=None, overrides=None, summaries=None), fetcher=FakeFetcher(),
                                         open_browser=False)
         cls.by = {(j["company"], j["title"]): j for j in cls.out}
 
@@ -151,20 +144,19 @@ class PipelineTest(unittest.TestCase):
         # GitLab posts "Data Engineer" three times (US-only, clearance, EMEA): the EMEA one must win
         self.assertEqual(b[("Gitlab", "Data Engineer")]["eligibility"], "LIKELY")
         self.assertIn("jobs/4", b[("Gitlab", "Data Engineer")]["url"])
-        self.assertEqual(self.summary["rejected"], 5)
+        self.assertEqual(self.summary["rejected"], 4)
 
     def test_same_title_keeps_eligible_version(self):
         # Mideast Co's role is remote and names Jordan -> eligible, but no on-site line in the email
         j = self.by[("Mideast Co", "Analytics Engineer")]
         self.assertNotIn("on-site", j["drafts"]["body"])
 
-    def test_alert_email_jobs(self):
-        j = self.by[("Contoso", "Senior Data Engineer")]
-        self.assertEqual(j["eligibility"], "ELIGIBLE")
-        self.assertEqual(j["source"], "LinkedIn alert")
-        self.assertNotIn(("US Corp", "Data Engineer"), self.by)
+    def test_summary_and_ids(self):
+        j = self.by[("Globex", "Senior Data Engineer")]
         self.assertTrue(j["id"] and len(j["id"]) == 16)
+        self.assertIn("overview", j["summary"])
         self.assertIn("rewrite_prompt", j["drafts"])
+        self.assertTrue((hunt.OUT / "to_summarize.json").exists())
 
     def test_salary_conversion(self):
         j = self.by[("Berlin Data GmbH", "Senior BI Engineer")]

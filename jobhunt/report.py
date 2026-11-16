@@ -45,7 +45,7 @@ h1{font-size:24px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 18px}
 .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:10px;margin-bottom:16px}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
 .stat b{display:block;font-size:22px}.stat span{color:var(--muted);font-size:13px}
-details.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:16px}
+details.panel{margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:16px}
 details.panel summary{cursor:pointer;font-weight:600}
 .manual{display:grid;gap:10px;margin-top:10px}.manual div{border-top:1px solid var(--line);padding-top:10px}
 .manual a{font-weight:600}.manual p{margin:2px 0 0;color:var(--muted);font-size:14px}
@@ -59,6 +59,14 @@ details.panel summary{cursor:pointer;font-weight:600}
 .title{font-size:17px;font-weight:650;margin:0}.title a{color:inherit;text-decoration:none}.title a:hover{text-decoration:underline}
 .meta{color:var(--muted);font-size:14px;margin-top:2px}
 .top>div:first-child{min-width:0}.title{overflow-wrap:anywhere}
+.head{flex:1;min-width:0}.head .meta b{color:var(--ink);font-weight:600}
+.fit{flex:none;width:52px;height:52px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:19px;line-height:1}
+.fit small{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-top:3px}
+.fit.hi{background:var(--ok-bg);color:var(--ok)}.fit.mid{background:var(--likely-bg);color:var(--likely)}.fit.lo{background:var(--chip);color:var(--muted)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.tags .badge{margin:0}.badge.plain{background:var(--chip);color:var(--muted);font-weight:600}
+.match{font-size:13px;margin:8px 0 2px;display:flex;flex-wrap:wrap;gap:4px 14px}.match .ok{color:var(--ok)}.match .gapt{color:var(--gap)}
+.fitnote{margin:8px 0 0;font-size:14px}
+.chips-row{display:flex;flex-wrap:wrap;gap:6px;width:100%;align-items:center}.sep{width:1px;height:20px;background:var(--line);margin:0 2px}
 .score{font-weight:700;font-size:20px;text-align:right}.score small{display:block;font-size:12px;color:var(--muted);font-weight:500}
 .badge{display:inline-block;font-size:12px;font-weight:650;border-radius:6px;padding:2px 8px;margin-right:6px}
 .ELIGIBLE{color:var(--ok);background:var(--ok-bg)}.LIKELY{color:var(--likely);background:var(--likely-bg)}.CHECK{color:var(--check);background:var(--check-bg)}
@@ -83,6 +91,13 @@ textarea{width:100%;min-height:260px;padding:10px;border-radius:8px;border:1px s
 textarea.note{min-height:90px}
 .settings{display:grid;gap:10px;margin-top:10px}.settings label{display:grid;gap:4px;font-size:14px;color:var(--muted)}
 .settings input,.settings textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;min-height:0}
+.glance{margin:10px 0 4px;font-size:14px}.glance p{margin:0 0 6px}
+.gcols{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px}@media(max-width:720px){.gcols{grid-template-columns:1fr}}
+.g h5{margin:4px 0 2px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.g ul{margin:0;padding-left:18px}.g li{margin:2px 0}
+.why{font-size:12.5px;color:var(--muted);margin-top:6px}.why .ev{font-style:italic}
+.lookupbox{margin-top:10px;padding:10px 12px;border:1px dashed var(--line);border-radius:10px}
+.person{padding:8px 0;border-top:1px solid var(--line)}.person:first-of-type{border-top:0}
 .empty{text-align:center;color:var(--muted);padding:40px}
 .warn{background:var(--check-bg);color:var(--check);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:14px}
 """
@@ -94,6 +109,7 @@ let state = {};
 try { state = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
 const byId = {}; DATA.jobs.forEach(j => { byId[j.id] = j; });
 let db = null, sample = null, mcp = null;
+const lookups = {};
 const timers = {};
 const st = k => (state[k] = state[k] || {});
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -140,24 +156,32 @@ function card(j) {
     ...c.people.map(p => `<div>👤 ${esc(p)} <span class="hint">(named in posting)</span></div>`),
     ...c.emails.map(e => `<div>✉️ <a href="mailto:${esc(e.email)}">${esc(e.email)}</a> <span class="hint">(${esc(e.kind)}, in posting)</span></div>`)
   ].join('') || '<div class="hint">The posting doesn\'t name anyone. Use the searches below.</div>';
+  const fitCls = j.fit_score >= 75 ? 'hi' : j.fit_score >= 55 ? 'mid' : 'lo';
+  const have = j.matched_skills.slice(0, 8), gaps = j.gaps;
   el.innerHTML = `
   <div class="top">
-    <div style="flex:1;min-width:240px">
-      <div><span class="badge ${j.eligibility}">${LABEL[j.eligibility] || j.eligibility}</span>${j.is_new ? '<span class="badge NEW">NEW</span>' : ''}</div>
+    <div class="head">
       <h3 class="title"><a href="${esc(j.url)}" target="_blank" rel="noopener">${esc(j.title)}</a></h3>
-      <div class="meta">${esc(j.company)} · ${esc(j.location || '—')} · ${ago(j.posted)} · via ${esc(j.source)}</div>
-      <div class="meta">💵 ${esc(j.salary_note)}${j.job_type ? ' · ' + esc(j.job_type) : ''}</div>
+      <div class="meta"><b>${esc(j.company)}</b> · ${esc(j.location || '—')}</div>
+      <div class="meta">${ago(j.posted)} · ${j.salary_note === 'Not listed' ? 'salary not listed' : '💵 ' + esc(j.salary_note)}${j.job_type ? ' · ' + esc(j.job_type) : ''} · via ${esc(j.source)}</div>
     </div>
-    <div class="score">${j.fit_score}<small>fit / 100</small></div>
+    <div class="fit ${fitCls}" title="How well this matches your resume">${j.fit_score}<small>fit</small></div>
   </div>
-  <div class="why"><b>Why:</b> ${esc(j.eligibility_reason)}${j.eligibility_evidence ? `<div class="ev">${esc(j.eligibility_evidence)}</div>` : ''}</div>
-  <div class="chips">${j.matched_skills.map(x => `<span class="chip">${esc(x)}</span>`).join('')}${j.gaps.map(x => `<span class="chip gap" title="Asked for in the posting, not on your resume">gap: ${esc(x)}</span>`).join('')}</div>
+  <div class="tags"><span class="badge ${j.eligibility}" title="${esc(j.eligibility_reason)}">${LABEL[j.eligibility] || j.eligibility}</span>${j.is_new ? '<span class="badge NEW">NEW</span>' : ''}<span class="badge plain">${esc(j.category)}</span><span class="badge plain">${esc(j.level)}</span></div>
+  ${glance(j.summary)}
+  ${(have.length || gaps.length) ? `<div class="match">${have.length ? '<span class="ok">✓ ' + have.map(esc).join(', ') + '</span>' : ''}${gaps.length ? '<span class="gapt">Gaps: ' + gaps.map(esc).join(', ') + '</span>' : ''}</div>` : ''}
+  <div class="why">${esc(j.eligibility_reason)}${j.eligibility_evidence ? ` <span class="ev">“${esc(j.eligibility_evidence)}”</span>` : ''}</div>
   <div class="actions">
-    <a class="btn primary" href="${esc(j.url)}" target="_blank" rel="noopener">Open posting ↗</a>
-    ${['todo','applied','emailed','skip'].map(x => `<button data-status="${x}" class="${(s.status||'todo')===x?'on':''}">${{todo:'To do',applied:'Applied',emailed:'Emailed',skip:'Skip'}[x]}</button>`).join('')}
+    <button class="btn primary" data-interested>I'm interested →</button>
+    <a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener">Full posting ↗</a>
+    ${['todo','applied','emailed','skip'].map(x => `<button data-status="${x}" class="${(s.status||'todo')===x?'on':''}">${{todo:'To do',applied:'Applied',emailed:'Emailed',skip:'Not for me'}[x]}</button>`).join('')}
   </div>
   <details class="more"${s.open ? ' open' : ''}>
-    <summary>Contact &amp; drafts</summary>
+    <summary>Recruiter contact &amp; email draft</summary>
+    <div class="lookupbox">
+      <div class="actions" style="margin-top:0"><button data-lookup hidden>🔎 Find the recruiter for me</button><span class="hint" data-lookup-msg></span></div>
+      <div data-lookup-out></div>
+    </div>
     <div class="grid">
       <div>
         <h4>Found in the posting</h4>${found}
@@ -253,8 +277,66 @@ function wire(el, j, s) {
     }
     btn.disabled = false;
   };
+  $('[data-interested]').onclick = () => { const d = $('details.more'); d.open = true; d.scrollIntoView({behavior: 'smooth', block: 'start'}); };
+  if (mcp && DATA.lookup_trigger_id) $('[data-lookup]').hidden = false;
+  $('[data-lookup]').onclick = () => findRecruiter(j, el);
+  renderLookup(el, j);
   $('details.more').ontoggle = e => { s.open = e.target.open; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (x) {} };
   refresh();
+}
+
+function glance(sm) {
+  if (!sm || !(sm.overview || (sm.do && sm.do.length) || (sm.need && sm.need.length))) return '';
+  const list = (h, xs) => xs && xs.length ? `<div class="g"><h5>${h}</h5><ul>${xs.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
+  return `<div class="glance">${sm.overview ? `<p>${esc(sm.overview)}</p>` : ''}<div class="gcols">${list("What you'd do", sm.do)}${list('What they want', sm.need)}</div>${sm.fit_note ? `<p class="fitnote">💡 ${esc(sm.fit_note)}</p>` : ''}</div>`;
+}
+
+function renderLookup(el, j) {
+  const out = el.querySelector('[data-lookup-out]'), msg = el.querySelector('[data-lookup-msg]'), btn = el.querySelector('[data-lookup]');
+  const L = lookups[j.id];
+  if (!L) { out.innerHTML = ''; return; }
+  if (L.status === 'searching') {
+    btn.disabled = true;
+    msg.textContent = 'Claude is looking this up — results appear here in a few minutes. You can leave the page.';
+    out.innerHTML = '';
+    return;
+  }
+  btn.disabled = false; btn.textContent = '🔎 Search again';
+  msg.textContent = L.updatedAt ? 'Found ' + ago(L.updatedAt) : '';
+  const people = (L.people || []).map((p, i) => `<div class="person">
+      <div><b>${esc(p.name)}</b> <span class="badge ${p.role === 'recruiter' ? 'LIKELY' : 'ELIGIBLE'}">${esc(p.role || 'contact')}</span><div class="hint">${esc(p.title || '')}</div></div>
+      <div class="actions" style="margin-top:4px">${p.linkedin ? `<a class="btn" href="${esc(p.linkedin)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}
+        ${p.email ? `<a class="btn" href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : ''}
+        <button data-useperson="${i}">Write to ${esc((p.name || '').split(' ')[0])}</button></div>
+    </div>`).join('');
+  out.innerHTML = `<h4>Found by Claude</h4>${people || '<div class="hint">No named recruiter or hiring manager found publicly.</div>'}
+    ${L.email_format ? `<div class="hint" style="margin-top:8px"><b>Email format:</b> ${esc(L.email_format)}${L.email_format_source ? ' (' + esc(L.email_format_source) + ')' : ''}</div>` : ''}
+    ${L.notes ? `<div class="hint" style="margin-top:4px">${esc(L.notes)}</div>` : ''}`;
+  out.querySelectorAll('[data-useperson]').forEach(b => b.onclick = () => {
+    const p = L.people[+b.dataset.useperson]; const parts = (p.name || '').trim().split(/\s+/);
+    const set = (f, v) => { const i = el.querySelector('input[data-f=' + f + ']'); i.value = v; i.dispatchEvent(new Event('input')); };
+    set('first', parts[0] || ''); set('last', parts.slice(1).join(' '));
+    if (L.domain) set('domain', L.domain);
+    if (p.email) set('to', p.email);
+    el.querySelector('[data-f=body]').scrollIntoView({behavior: 'smooth', block: 'center'});
+  });
+}
+
+async function findRecruiter(j, el) {
+  const btn = el.querySelector('[data-lookup]'), msg = el.querySelector('[data-lookup-msg]');
+  btn.disabled = true; msg.textContent = 'Asking Claude to look this up…';
+  try {
+    if (db) await db.doc('contacts/' + j.id).set({status: 'searching', requestedAt: new Date().toISOString(), title: j.title, company: j.company});
+    await mcp.callTool('Claude Code Remote', 'fire_trigger', {trigger_id: DATA.lookup_trigger_id,
+      text: 'JOB: ' + JSON.stringify({id: j.id, title: j.title, company: j.company, location: j.location, url: j.url, domain_guess: j.contacts.domain})});
+    msg.textContent = 'Claude is looking this up — results appear here in a few minutes. You can leave the page.';
+  } catch (e) {
+    const c = e && e.code;
+    msg.textContent = c === 'consent_required' || c === 'not_granted' ? 'Allow the Claude Code connector for this page to use this button.' :
+      'Couldn\'t start the lookup (' + (c || 'error') + '). Use the LinkedIn searches below instead.';
+    if (db) db.doc('contacts/' + j.id).delete().catch(() => {});
+    btn.disabled = false;
+  }
 }
 
 function render() {
@@ -262,18 +344,20 @@ function render() {
   const qv = document.getElementById('q').value.toLowerCase();
   const show = new Set([...document.querySelectorAll('[data-show]:checked')].map(x => x.dataset.show));
   const hideDone = document.getElementById('hideDone').checked;
+  const newOnly = document.getElementById('newOnly').checked;
+  const cats = new Set([...document.querySelectorAll('[data-cat]:checked')].map(x => x.dataset.cat));
   const sort = document.getElementById('sort').value;
-  let jobs = DATA.jobs.filter(j => show.has(j.eligibility)
-    && (!hideDone || !(state[j.key] && state[j.key].status && state[j.key].status !== 'todo'))
+  let jobs = DATA.jobs.filter(j => show.has(j.eligibility) && cats.has(j.category) && (!newOnly || j.is_new)
+    && (!hideDone || !(state[j.key] && ['applied', 'skip'].includes(state[j.key].status)))
     && (!qv || (j.title + ' ' + j.company + ' ' + j.location).toLowerCase().includes(qv)));
   const rank = {ELIGIBLE: 0, LIKELY: 1, CHECK: 2};
   jobs.sort((a, b) => sort === 'date' ? (b.posted || '').localeCompare(a.posted || '')
     : sort === 'fit' ? b.fit_score - a.fit_score
-    : (rank[a.eligibility] - rank[b.eligibility]) || (b.fit_score - a.fit_score));
+    : (rank[a.eligibility] - rank[b.eligibility]) || (b.fit_score - a.fit_score) || (b.posted || '').localeCompare(a.posted || ''));
   list.innerHTML = '';
   if (!jobs.length) list.innerHTML = '<div class="empty">Nothing matches these filters.</div>';
   jobs.forEach(j => list.appendChild(card(j)));
-  document.getElementById('count').textContent = jobs.length + ' shown';
+  document.getElementById('count').textContent = jobs.length + ' of ' + DATA.jobs.length + ' jobs';
 }
 
 function applyRemote(snap) {
@@ -301,8 +385,8 @@ function readSettingsForm() {
           search_terms: f.terms.value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 30)};
 }
 
-['q', 'hideDone', 'sort'].forEach(id => document.getElementById(id).addEventListener('input', render));
-document.querySelectorAll('[data-show]').forEach(x => x.addEventListener('change', render));
+['q', 'hideDone', 'newOnly', 'sort'].forEach(id => document.getElementById(id).addEventListener('input', render));
+document.querySelectorAll('[data-show],[data-cat]').forEach(x => x.addEventListener('change', render));
 settingsForm(DATA.settings);
 render();
 
@@ -310,13 +394,20 @@ render();
   if (!window.claude || !window.claude.use) { setSync('Saved on this device'); return; }
   const [d, s, m] = await Promise.all(['db', 'sample', 'mcp'].map(n => window.claude.use(n).catch(() => null)));
   sample = s; mcp = m;
-  if (sample) document.querySelectorAll('.card').forEach(el => { const j = byId[el.dataset.id]; if (j) el.replaceWith(card(j)); });
+  if (sample || mcp) document.querySelectorAll('.card').forEach(el => { const j = byId[el.dataset.id]; if (j) el.replaceWith(card(j)); });
   if (d) {
     db = d;
     setSync('Syncing…');
     const timer = setTimeout(() => setSync('Sync is slow — changes are saved on this device'), 10000);
     db.collection('state').onSnapshot(snap => { clearTimeout(timer); setSync('Synced across your devices'); applyRemote(snap); },
       err => { clearTimeout(timer); setSync('Sync unavailable (' + ((err && err.code) || 'error') + ') — saved on this device'); });
+    db.collection('contacts').onSnapshot(snap => {
+      snap.docChanges().forEach(ch => {
+        if (ch.type === 'removed') delete lookups[ch.doc.id]; else lookups[ch.doc.id] = ch.doc.data();
+        const el = document.querySelector('.card[data-id="' + ch.doc.id + '"]');
+        if (el && byId[ch.doc.id]) renderLookup(el, byId[ch.doc.id]);
+      });
+    }, () => {});
     db.doc('config/settings').get().then(doc => { if (doc.exists) settingsForm(Object.assign({}, DATA.settings, doc.data())); }).catch(() => {});
     const form = document.getElementById('settings');
     form.querySelector('button').disabled = false;
@@ -350,8 +441,8 @@ render();
 """
 
 
-def render_report(path, jobs, summary, settings, trigger_id=""):
-    data = {"jobs": jobs, "summary": summary, "trigger_id": trigger_id, "settings": {
+def render_report(path, jobs, summary, settings, trigger_id="", lookup_trigger_id=""):
+    data = {"jobs": jobs, "summary": summary, "trigger_id": trigger_id, "lookup_trigger_id": lookup_trigger_id, "settings": {
         "min_salary_usd": settings["min_salary_usd"], "max_age_days": settings["max_age_days"],
         "search_terms": settings["search_terms"]}}
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
@@ -377,7 +468,25 @@ def render_report(path, jobs, summary, settings, trigger_id=""):
 <div class="actions" style="margin:-6px 0 14px"><button id="runNow" class="btn primary" hidden>Run a fresh search now</button><span class="hint" id="runMsg"></span></div>
 <div class="stats">{stats}</div>
 {warn}
-<details class="panel"><summary>Also do these by hand (sites that can't be pulled automatically)</summary><div class="manual">{manual}</div></details>
+<div class="bar">
+  <input id="q" type="search" placeholder="Search title, company, location…">
+  <select id="sort"><option value="best">Best match</option><option value="date">Newest</option><option value="fit">Fit score</option></select>
+  <div class="chips-row">
+    <label class="tog"><input type="checkbox" data-show="ELIGIBLE" checked> Eligible</label>
+    <label class="tog"><input type="checkbox" data-show="LIKELY" checked> Likely</label>
+    <label class="tog"><input type="checkbox" data-show="CHECK" checked> Check</label>
+    <span class="sep"></span>
+    <label class="tog"><input type="checkbox" data-cat="Data Engineering" checked> Data Eng</label>
+    <label class="tog"><input type="checkbox" data-cat="BI & Analytics" checked> BI &amp; Analytics</label>
+    <label class="tog"><input type="checkbox" data-cat="Power Platform" checked> Power Platform</label>
+    <label class="tog"><input type="checkbox" data-cat="Leadership" checked> Leadership</label>
+    <span class="sep"></span>
+    <label class="tog"><input type="checkbox" id="newOnly"> New only</label>
+    <label class="tog"><input type="checkbox" id="hideDone" checked> Hide applied/skipped</label>
+  </div>
+  <span class="hint" id="count"></span>
+</div>
+<div id="list"></div>
 <details class="panel"><summary>Search settings</summary>
 <form id="settings" class="settings">
   <label>Pay floor (USD / year)<input name="floor" type="number" min="0" step="5000"></label>
@@ -385,17 +494,8 @@ def render_report(path, jobs, summary, settings, trigger_id=""):
   <label>Search terms (one per line)<textarea name="terms" rows="6"></textarea></label>
   <div class="actions"><button type="submit" disabled>Save settings</button><span class="hint" id="settingsMsg">Saving works on the published page.</span></div>
 </form></details>
-<details class="panel"><summary>Why jobs were ruled out ({summary['rejected']})</summary><ul>{reasons}</ul></details>
-<div class="bar">
-  <input id="q" type="search" placeholder="Filter by title, company, location…">
-  <label class="tog"><input type="checkbox" data-show="ELIGIBLE" checked> Eligible</label>
-  <label class="tog"><input type="checkbox" data-show="LIKELY" checked> Likely</label>
-  <label class="tog"><input type="checkbox" data-show="CHECK" checked> Check</label>
-  <label class="tog"><input type="checkbox" id="hideDone"> Hide done</label>
-  <select id="sort"><option value="best">Best first</option><option value="fit">Fit score</option><option value="date">Newest</option></select>
-  <span class="hint" id="count"></span>
-</div>
-<div id="list"></div>
+<details class="panel"><summary>More places to look by hand</summary><div class="manual">{manual}</div></details>
+<details class="panel"><summary>Why {summary['rejected']} jobs were ruled out</summary><ul>{reasons}</ul></details>
 <p class="hint">Statuses, names and edited drafts sync across your devices on the published page (and are saved in this browser when opened as a file). Job listings come from Himalayas, Remotive, RemoteOK, Jobicy, Working Nomads, We Work Remotely, Amazon Jobs and company career boards; each card links back to the original posting.</p>
 </div>
 <script id="data" type="application/json">{blob}</script>

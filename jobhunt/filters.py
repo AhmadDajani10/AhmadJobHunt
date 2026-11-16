@@ -50,6 +50,53 @@ GAP_SKILLS = {
 }
 
 
+LANG_REQ = (r"(fluent|fluency|native|proficien\w*|business[- ]level|professional[- ]level|excellent|strong)\s+(in\s+|command of\s+)?"
+            r"(?P<lang>arabic|german|french|spanish|dutch|portuguese|italian|polish|japanese|mandarin|korean|turkish|hebrew|swedish|danish|norwegian|finnish|czech)\b"
+            r"|(?P<lang2>arabic)[- ]speaking")
+
+
+def category(title):
+    t = title.lower()
+    if re.search(r"power (platform|apps|automate)", t):
+        return "Power Platform"
+    if re.search(r"\bhead of|director|\bvp\b|vice president|manager|team lead(er)?\b", t):
+        return "Leadership"
+    if re.search(r"data engineer|analytics engineer|etl|\belt\b|pipeline|data platform|data integration|azure data|"
+                 r"data architect|warehouse|database|sql (developer|engineer)|data developer", t):
+        return "Data Engineering"
+    return "BI & Analytics"
+
+
+def level(title):
+    t = title.lower()
+    if re.search(r"head of|director|\bvp\b|vice president|chief", t):
+        return "Head / Director"
+    if re.search(r"principal|staff|\blead\b|architect|manager", t):
+        return "Lead / Principal"
+    if re.search(r"senior|\bsr\b", t):
+        return "Senior"
+    if re.search(r"junior|\bjr\b|entry|graduate|associate", t):
+        return "Junior"
+    return "Mid"
+
+
+def short_location(job):
+    restr = job.restrictions
+    if restr is not None:
+        if not restr:
+            return "Remote · worldwide"
+        if len(restr) > 4:
+            has_jo = any(re.search(JORDAN, r, re.I) for r in restr)
+            return f"Remote · {len(restr)} countries" + (" incl. Jordan" if has_jo else "")
+        return "Remote · " + ", ".join(restr)
+    loc = (job.location or "").strip()
+    parts = [x.strip() for x in re.split(r"[;,]", loc) if x.strip()]
+    if len(loc) > 70 and len(parts) > 3:
+        has_jo = bool(re.search(JORDAN, loc, re.I))
+        return ", ".join(parts[:3]) + f" +{len(parts) - 3} more" + (" (incl. Jordan)" if has_jo else "")
+    return loc
+
+
 def title_fit(title):
     t = title.lower()
     if any(re.search(p, t) for p in EXCLUDE_TITLES):
@@ -66,6 +113,12 @@ def score_fit(job):
     text = (job.title + " " + job.description + " " + " ".join(job.tags)).lower()
     have = sorted({name for pat, name in HAVE_SKILLS.items() if re.search(pat, text)})
     gaps = sorted({name for pat, name in GAP_SKILLS.items() if re.search(pat, text)})
+    for m in re.finditer(LANG_REQ, text):
+        lang = (m.group("lang") or m.group("lang2")).title()
+        if lang == "Arabic":
+            have = sorted(set(have) | {"Arabic ✓"})
+        else:
+            gaps = sorted(set(gaps) | {f"{lang} required"})
     score = 45 if level == 2 else 25 if level == 1 else 0
     score += min(len(have) * 4, 40)
     t = job.title.lower()

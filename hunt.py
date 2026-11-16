@@ -6,6 +6,7 @@ Options:
   --no-open     don't open the browser at the end
   --days N      only keep postings from the last N days (default from config/settings.json)
   --overrides F JSON file whose keys override config/settings.json (the web page's saved settings)
+  --summaries F JSON of short job summaries written by Claude (default data/summaries.json)
 """
 import argparse
 import csv
@@ -22,8 +23,10 @@ sys.path.insert(0, str(ROOT))
 
 from jobhunt.contacts import find_contacts  # noqa: E402
 from jobhunt.drafts import build_drafts  # noqa: E402
-from jobhunt.filters import classify_location, meets_floor, normalize_salary, score_fit  # noqa: E402
+from jobhunt.filters import (category, classify_location, level, meets_floor, normalize_salary,  # noqa: E402
+                             score_fit, short_location)
 from jobhunt.http import Fetcher  # noqa: E402
+from jobhunt.summarize import summarize  # noqa: E402
 from jobhunt.report import render_report  # noqa: E402
 from jobhunt.sources import SOURCES  # noqa: E402
 
@@ -41,7 +44,7 @@ def load_private():
     path = CONFIG / "private.json"
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
-    info = {"email": "", "phone": "", "linkedin": "", "trigger_id": ""}
+    info = {"email": "", "phone": "", "linkedin": "", "trigger_id": "", "lookup_trigger_id": ""}
     if sys.stdin.isatty():
         log("\nFirst run: a few details for your email signature (saved only on this computer, never uploaded).")
         info["email"] = input("  Your email: ").strip()
@@ -70,7 +73,8 @@ def run(args, fetcher=None, open_browser=True):
         log(f"  using settings saved on the web page: {', '.join(k for k in over if over.get(k))}")
     if args.days:
         settings["max_age_days"] = args.days
-    settings.setdefault("alert_jobs_file", str(DATA / "alert_jobs.json"))
+    summaries_path = Path(getattr(args, "summaries", None) or DATA / "summaries.json")
+    claude_summaries = json.loads(summaries_path.read_text(encoding="utf-8")) if summaries_path.exists() else {}
     fetcher = fetcher or Fetcher(ROOT / ".cache", settings.get("cache_hours", 6), refresh=args.refresh)
 
     # 1. collect
@@ -134,15 +138,26 @@ def run(args, fetcher=None, open_browser=True):
     today = datetime.now().strftime("%Y-%m-%d")
     recent = datetime.now(timezone.utc) - timedelta(hours=48)
     out = []
+    to_summarize = []
     for j in kept:
+        jid = hashlib.sha1(j.key.encode()).hexdigest()[:16]
+        summary = claude_summaries.get(jid)
+        if summary:
+            summary = dict(summary, by="claude")
+        else:
+            summary = summarize(j)
+            to_summarize.append({"id": jid, "title": j.title, "company": j.company, "location": j.location,
+                                 "description": j.description[:5000]})
         # with run-to-run memory: never seen before. Without it (fresh cloud run): posted in the last 2 days.
         is_new = (j.key not in seen) if has_memory else bool(j.posted and j.posted >= recent)
         seen.setdefault(j.key, today)
         out.append({
-            "id": hashlib.sha1(j.key.encode()).hexdigest()[:16], "key": j.key, "title": j.title, "company": j.company, "url": j.url, "source": j.source,
-            "location": j.location, "posted": j.posted.isoformat() if j.posted else None,
+            "id": jid, "key": j.key, "title": j.title, "summary": summary, "company": j.company, "url": j.url, "source": j.source,
+            "location": short_location(j), "category": category(j.title), "level": level(j.title),
+            "posted": j.posted.isoformat() if j.posted else None,
             "eligibility": j.eligibility, "eligibility_reason": j.eligibility_reason,
-            "eligibility_evidence": j.eligibility_evidence, "salary_note": j.salary_note,
+            "eligibility_evidence": "" if (j.eligibility_evidence == j.location and len(j.location) > 70)
+            else j.eligibility_evidence[:240], "salary_note": j.salary_note,
             "job_type": j.job_type, "fit_score": j.fit_score, "matched_skills": j.matched_skills,
             "gaps": j.gaps, "is_new": is_new, "first_seen": seen[j.key],
             "contacts": find_contacts(j), "drafts": build_drafts(j, profile),
@@ -159,8 +174,10 @@ def run(args, fetcher=None, open_browser=True):
         "reject_reasons": sorted(reject_reasons.items(), key=lambda x: -x[1]), "errors": errors,
     }
     OUT.mkdir(exist_ok=True)
+    (OUT / "to_summarize.json").write_text(json.dumps(to_summarize, ensure_ascii=False, indent=1), encoding="utf-8")
     report = OUT / "report.html"
-    render_report(report, out, summary, settings, trigger_id=private.get("trigger_id", ""))
+    render_report(report, out, summary, settings, trigger_id=private.get("trigger_id", ""),
+                  lookup_trigger_id=private.get("lookup_trigger_id", ""))
     with open(OUT / "jobs.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["eligibility", "fit", "title", "company", "location", "salary", "posted", "first_seen", "url", "why"])
@@ -187,6 +204,7 @@ def main():
     p.add_argument("--no-open", action="store_true")
     p.add_argument("--days", type=int)
     p.add_argument("--overrides")
+    p.add_argument("--summaries", help="JSON {job_id: {overview, do, need}} written by Claude; default data/summaries.json")
     args = p.parse_args()
     log("Searching job sources…")
     run(args)

@@ -330,30 +330,6 @@ def watchlist(fetcher, settings, log):
     return out
 
 
-def alert_emails(fetcher, settings, log):
-    """Jobs pulled from LinkedIn / Indeed / Bayt job-alert emails. The daily cloud run reads your
-    Gmail (with your permission) and writes them to data/alert_jobs.json; this just loads that file."""
-    import json
-    from pathlib import Path
-    path = Path(settings.get("alert_jobs_file") or "data/alert_jobs.json")
-    if not path.exists():
-        return []
-    out = []
-    for j in json.loads(path.read_text(encoding="utf-8")):
-        if not j.get("title") or not j.get("url"):
-            continue
-        out.append(Job(
-            source=j.get("source") or "Job alert email",
-            title=j["title"], company=j.get("company", ""), url=j["url"],
-            location=j.get("location", ""),
-            remote=True if "remote" in (j.get("location", "") + j.get("workplace", "")).lower() else None,
-            description=j.get("description", ""),
-            posted=parse_date(j.get("posted")),
-            salary_text=j.get("salary", ""),
-        ))
-    return out
-
-
 SOURCES = {
     "himalayas": himalayas,
     "remotive": remotive,
@@ -363,5 +339,4 @@ SOURCES = {
     "weworkremotely": weworkremotely,
     "amazon_jordan": amazon_jordan,
     "watchlist": watchlist,
-    "alert_emails": alert_emails,
 }
