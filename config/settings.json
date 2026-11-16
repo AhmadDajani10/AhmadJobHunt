@@ -4,6 +4,8 @@
   "cache_hours": 6,
   "show_statuses": ["ELIGIBLE", "LIKELY", "CHECK"],
   "min_fit_score": 40,
+  "skip_ai_interviews": true,
+  "skip_companies": ["micro1", "mercor", "xperteez"],
   "himalayas_pages": 3,
   "himalayas_terms": ["data engineer", "business intelligence", "power bi", "analytics engineer", "data analyst", "etl", "sql", "power platform"],
 

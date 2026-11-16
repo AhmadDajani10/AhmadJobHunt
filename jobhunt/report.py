@@ -90,6 +90,7 @@ h4{margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;c
 textarea{width:100%;min-height:260px;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--code);color:var(--ink);font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
 textarea.note{min-height:90px}
 .settings{display:grid;gap:10px;margin-top:10px}.settings label{display:grid;gap:4px;font-size:14px;color:var(--muted)}
+.settings label.check{display:flex;align-items:center;gap:8px;color:var(--ink)}.settings label.check input{width:auto}
 .settings input,.settings textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;min-height:0}
 .glance{margin:10px 0 4px;font-size:14px}.glance p{margin:0 0 6px}
 .gcols{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px}@media(max-width:720px){.gcols{grid-template-columns:1fr}}
@@ -348,6 +349,7 @@ function render() {
   const cats = new Set([...document.querySelectorAll('[data-cat]:checked')].map(x => x.dataset.cat));
   const sort = document.getElementById('sort').value;
   let jobs = DATA.jobs.filter(j => show.has(j.eligibility) && cats.has(j.category) && (!newOnly || j.is_new)
+    && !skipList.some(n => norm(j.company).includes(n))
     && (!hideDone || !(state[j.key] && ['applied', 'skip'].includes(state[j.key].status)))
     && (!qv || (j.title + ' ' + j.company + ' ' + j.location).toLowerCase().includes(qv)));
   const rank = {ELIGIBLE: 0, LIKELY: 1, CHECK: 2};
@@ -378,11 +380,18 @@ function settingsForm(cfg) {
   const f = document.getElementById('settings');
   f.floor.value = cfg.min_salary_usd; f.days.value = cfg.max_age_days;
   f.terms.value = (cfg.search_terms || []).join('\n');
+  f.skip.value = (cfg.skip_companies || []).join('\n');
+  f.noai.checked = cfg.skip_ai_interviews !== false;
+  skipList = (cfg.skip_companies || []).map(norm).filter(Boolean);
 }
+const norm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+let skipList = [];
 function readSettingsForm() {
   const f = document.getElementById('settings');
   return {min_salary_usd: Math.max(0, parseInt(f.floor.value, 10) || 0), max_age_days: Math.max(1, parseInt(f.days.value, 10) || 21),
-          search_terms: f.terms.value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 30)};
+          search_terms: f.terms.value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 30),
+          skip_companies: f.skip.value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 100),
+          skip_ai_interviews: f.noai.checked};
 }
 
 ['q', 'hideDone', 'newOnly', 'sort'].forEach(id => document.getElementById(id).addEventListener('input', render));
@@ -415,7 +424,8 @@ render();
       e.preventDefault();
       const msg = document.getElementById('settingsMsg');
       db.doc('config/settings').set(readSettingsForm())
-        .then(() => { msg.textContent = 'Saved — used from the next search run.'; })
+        .then(() => { msg.textContent = 'Saved. Skipped companies are hidden now; other changes apply from the next search run.';
+          skipList = readSettingsForm().skip_companies.map(norm).filter(Boolean); render(); })
         .catch(err => { msg.textContent = 'Could not save (' + ((err && err.code) || 'error') + ').'; });
     };
   } else setSync('Saved on this device');
@@ -444,7 +454,8 @@ render();
 def render_report(path, jobs, summary, settings, trigger_id="", lookup_trigger_id=""):
     data = {"jobs": jobs, "summary": summary, "trigger_id": trigger_id, "lookup_trigger_id": lookup_trigger_id, "settings": {
         "min_salary_usd": settings["min_salary_usd"], "max_age_days": settings["max_age_days"],
-        "search_terms": settings["search_terms"]}}
+        "search_terms": settings["search_terms"], "skip_companies": settings.get("skip_companies", []),
+        "skip_ai_interviews": settings.get("skip_ai_interviews", True)}}
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     gen = datetime.now(timezone.utc).astimezone().strftime("%a %d %b %Y, %H:%M")
     counts = summary["counts"]
@@ -492,6 +503,8 @@ def render_report(path, jobs, summary, settings, trigger_id="", lookup_trigger_i
   <label>Pay floor (USD / year)<input name="floor" type="number" min="0" step="5000"></label>
   <label>Only postings from the last N days<input name="days" type="number" min="1" max="60"></label>
   <label>Search terms (one per line)<textarea name="terms" rows="6"></textarea></label>
+  <label>Companies to skip (one per line)<textarea name="skip" rows="4" placeholder="micro1"></textarea></label>
+  <label class="check"><input type="checkbox" name="noai"> Skip jobs that use AI interviews</label>
   <div class="actions"><button type="submit" disabled>Save settings</button><span class="hint" id="settingsMsg">Saving works on the published page.</span></div>
 </form></details>
 <details class="panel"><summary>More places to look by hand</summary><div class="manual">{manual}</div></details>

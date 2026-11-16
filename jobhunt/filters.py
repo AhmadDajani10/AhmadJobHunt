@@ -133,6 +133,24 @@ def score_fit(job):
     return level
 
 
+# ------------------------------------------------------------------ hiring process
+AI_INTERVIEW = re.compile(
+    r"(complete|take|do|start|record|pass)\s+(an?|the|a short|our|your)?\s*(\d+[- ]minute\s+)?ai[- ]?(led |powered |based |driven |conducted )?interview"
+    r"|ai[- ](led|powered|conducted|driven)\s+(video\s+)?interview|interview(ed)?\s+(with|by)\s+(our\s+|an\s+)?ai\b"
+    r"|ai\s+interviewer|ai interview (based|with|about|containing|of)", re.I)
+
+
+def skip_reason(job, settings):
+    comp = re.sub(r"[^a-z0-9]", "", (job.company or "").lower())
+    for name in settings.get("skip_companies") or []:
+        n = re.sub(r"[^a-z0-9]", "", name.lower())
+        if n and n in comp:
+            return "Company on your skip list"
+    if settings.get("skip_ai_interviews", True) and AI_INTERVIEW.search(job.description or ""):
+        return "Uses AI interviews"
+    return None
+
+
 # ------------------------------------------------------------------ location eligibility
 JORDAN = r"\bjordan\b|\bamman\b|\birbid\b|\baqaba\b|\bzarqa\b"
 WORLDWIDE = r"worldwide|anywhere|\bglobal(ly)?\b|all countries|work from anywhere|any location|fully distributed|\bremote\s*\(?\s*global"

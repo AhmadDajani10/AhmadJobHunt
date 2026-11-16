@@ -59,6 +59,10 @@ FIXTURES = {
          "jobDescription": DESC, "pubDate": ISO, "annualSalaryMin": 70000, "annualSalaryMax": 90000, "salaryCurrency": "EUR"},
     ]},
     "workingnomads.com": [
+        {"title": "Senior Data Engineer", "company_name": "micro1", "url": "https://workingnomads.com/j/9",
+         "location": "Anywhere", "description": DESC, "pub_date": ISO},
+        {"title": "Analytics Engineer", "company_name": "SomeBoard", "url": "https://workingnomads.com/j/8",
+         "location": "Anywhere", "description": DESC + " Next step: complete the AI interview for this role.", "pub_date": ISO},
         {"title": "Data Engineer (Contract)", "company_name": "NomadCo", "url": "https://workingnomads.com/j/1",
          "location": "Anywhere", "description": DESC, "pub_date": ISO, "tags": "sql,python"},
     ],
@@ -144,7 +148,7 @@ class PipelineTest(unittest.TestCase):
         # GitLab posts "Data Engineer" three times (US-only, clearance, EMEA): the EMEA one must win
         self.assertEqual(b[("Gitlab", "Data Engineer")]["eligibility"], "LIKELY")
         self.assertIn("jobs/4", b[("Gitlab", "Data Engineer")]["url"])
-        self.assertEqual(self.summary["rejected"], 4)
+        self.assertEqual(self.summary["rejected"], 6)
 
     def test_same_title_keeps_eligible_version(self):
         # Mideast Co's role is remote and names Jordan -> eligible, but no on-site line in the email
@@ -157,6 +161,13 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("overview", j["summary"])
         self.assertIn("rewrite_prompt", j["drafts"])
         self.assertTrue((hunt.OUT / "to_summarize.json").exists())
+
+    def test_skips_ai_interview_platforms(self):
+        self.assertNotIn(("micro1", "Senior Data Engineer"), self.by)
+        self.assertNotIn(("SomeBoard", "Analytics Engineer"), self.by)
+        reasons = dict(self.summary["reject_reasons"])
+        self.assertEqual(reasons.get("Company on your skip list"), 1)
+        self.assertEqual(reasons.get("Uses AI interviews"), 1)
 
     def test_salary_conversion(self):
         j = self.by[("Berlin Data GmbH", "Senior BI Engineer")]

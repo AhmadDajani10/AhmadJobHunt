@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT))
 from jobhunt.contacts import find_contacts  # noqa: E402
 from jobhunt.drafts import build_drafts  # noqa: E402
 from jobhunt.filters import (category, classify_location, level, meets_floor, normalize_salary,  # noqa: E402
-                             score_fit, short_location)
+                             score_fit, short_location, skip_reason)
 from jobhunt.http import Fetcher  # noqa: E402
 from jobhunt.summarize import summarize  # noqa: E402
 from jobhunt.report import render_report  # noqa: E402
@@ -67,10 +67,12 @@ def run(args, fetcher=None, open_browser=True):
     profile["signature_line"] = " · ".join(x for x in (private.get("email"), private.get("phone"), private.get("linkedin")) if x)
     if getattr(args, "overrides", None) and Path(args.overrides).exists():
         over = json.loads(Path(args.overrides).read_text(encoding="utf-8"))
-        for k in ("min_salary_usd", "max_age_days", "search_terms"):
-            if over.get(k):
+        used = []
+        for k in ("min_salary_usd", "max_age_days", "search_terms", "skip_companies", "skip_ai_interviews"):
+            if k in over and over[k] not in (None, "", []) or (k in ("skip_companies", "skip_ai_interviews") and k in over):
                 settings[k] = over[k]
-        log(f"  using settings saved on the web page: {', '.join(k for k in over if over.get(k))}")
+                used.append(k)
+        log(f"  using settings saved on the web page: {', '.join(used)}")
     if args.days:
         settings["max_age_days"] = args.days
     summaries_path = Path(getattr(args, "summaries", None) or DATA / "summaries.json")
@@ -116,8 +118,10 @@ def run(args, fetcher=None, open_browser=True):
     # 3. drop what can't be done from Jordan or pays under the floor
     kept, reject_reasons = [], {}
     for j in jobs:
-        reason = None
-        if j.eligibility == "REJECT":
+        reason = skip_reason(j, settings)
+        if reason:
+            pass
+        elif j.eligibility == "REJECT":
             reason = j.eligibility_reason.split(":")[0]
         elif not meets_floor(j, floor):
             reason = f"Pays under ${floor:,}"
