@@ -21,7 +21,7 @@ EXCLUDE_TITLES = [
     r"marketing manager", r"customer success", r"\bnurse\b", r"teacher", r"tutor", r"\bphd\b",
     r"full[- ]?stack", r"front[- ]?end", r"\bqa\b", r"quality assurance", r"\btest(ing)?\b",
     r"product (manager|owner|designer)", r"\bdesigner\b", r"mechanical", r"electrical", r"\bcivil\b",
-    r"security engineer", r"privacy", r"compliance associate",
+    r"security engineer", r"privacy", r"compliance", r"\btax\b", r"accelerator program", r"graduate program",
     r"\bfrench\b|\bgerman\b|\bjapanese\b|\bkorean\b|\bmandarin\b|\bdutch\b|\bitalian\b|\bspanish speaking\b",
 ]
 
@@ -154,7 +154,7 @@ def skip_reason(job, settings):
 # ------------------------------------------------------------------ location eligibility
 JORDAN = r"\bjordan\b|\bamman\b|\birbid\b|\baqaba\b|\bzarqa\b"
 WORLDWIDE = r"worldwide|anywhere|\bglobal(ly)?\b|all countries|work from anywhere|any location|fully distributed|\bremote\s*\(?\s*global"
-REGION_OK = r"\bemea\b|\bmena\b|middle east|\bgcc\b|\barab\b|levant|europe,? middle east"
+REGION_OK = r"\bemea\b|\bmena\b|middle east|\bgcc\b|\barab (world|countries|region)\b|\blevant\b|europe,? middle east"
 REGION_MAYBE = r"\beurope\b|\beu\b|\bcet\b|\beet\b|\basia\b|\bapac\b|africa|\bgmt\b|\butc\s*[+-]"
 HIRE_ANYWHERE_HINTS = (
     r"(via|through|using) (deel|remote\.com|oyster|rippling|papaya|velocity global|an? employer of record|an? eor)",
@@ -187,6 +187,32 @@ REGION_WORDS = {
     "EMEA": r"\bemea\b|europe|\beu\b|\buk\b|united kingdom|london|berlin|germany|france|spain|netherlands|"
             r"poland|ireland|portugal|\bcet\b|\beet\b",
 }
+
+
+# Region limits stated in the posting text, e.g. "open to candidates in Europe and LATAM".
+LIMIT_REGIONS = (r"europe(an union)?|\beu\b|\beea\b|latam|latin america|south america|north america|\bapac\b|"
+                 r"\basia\b|africa|\buk\b|united kingdom|canada|india|australia|\bcet\b")
+REGION_LIMIT = re.compile(
+    r"(open (only )?to (candidates|applicants|people|those)?\s*(based |located |residing |living )?(in|from)|"
+    r"(must|need to|should) (be|reside|live)\s*(based |located )?(in|within)|"
+    r"(candidates|applicants) (must be )?(based|located|residing) in|"
+    r"hiring (only )?in|available (only )?(in|to candidates in)|we (can )?(only )?hire in|remote (within|in|across))"
+    r"\s+(?P<where>[^.;\n]{0,80})", re.I)
+
+
+def stated_region_limit(desc):
+    """Return the sentence fragment if the posting limits where you can live, and Jordan/MENA/worldwide isn't in it."""
+    for m in REGION_LIMIT.finditer(desc or ""):
+        where = m.group("where")
+        if re.search(LIMIT_REGIONS, where, re.I) and not re.search(JORDAN + "|" + REGION_OK + "|" + WORLDWIDE, where, re.I):
+            return m.group(0).strip()
+    return ""
+
+
+def says_anywhere(desc):
+    return bool(re.search(r"work from anywhere|anywhere in the world|from any country|fully remote,? (worldwide|globally|anywhere)|"
+                          r"(hire|hiring|open to (candidates|people)) (from )?(anywhere|worldwide|globally|all over the world)|"
+                          + JORDAN + "|" + REGION_OK, desc or "", re.I))
 
 
 TZ_BASE = {"utc": 0, "gmt": 0, "cet": 1, "cest": 2, "eet": 2, "eest": 3, "est": -5, "et": -5, "pst": -8}
@@ -240,8 +266,15 @@ def classify_location(job):
     # Structured restrictions (Himalayas): [] means worldwide
     if restr is not None:
         joined = ", ".join(restr)
+        limit = stated_region_limit(desc)
+        if limit:
+            return set_("CHECK", "The posting limits where you can live — Jordan isn't mentioned", limit)
         if not restr:
-            status, reason = "ELIGIBLE", "Listed as open worldwide"
+            if says_anywhere(desc):
+                status, reason = "ELIGIBLE", "Open worldwide (stated in the posting)"
+            else:
+                return set_("LIKELY", "Listed as worldwide on Himalayas, but the posting doesn't say — confirm on the company's page",
+                            "")
         elif re.search(JORDAN, joined, re.I):
             return set_("ELIGIBLE", "Jordan is explicitly allowed", joined)
         elif re.search(REGION_OK, joined, re.I):
@@ -260,6 +293,9 @@ def classify_location(job):
 
     res = next((p for p in US_RESIDENCY if re.search(p, desc + " " + loc, re.I)), None)
 
+    limit = stated_region_limit(desc)
+    if limit and not re.search(JORDAN, loc):
+        return set_("CHECK", "The posting limits where you can live — Jordan isn't mentioned", limit)
     if re.search(WORLDWIDE, loc):
         if res:
             return set_("CHECK", "Says worldwide, but description mentions US residency", _find(res, desc))

@@ -33,6 +33,10 @@ FIXTURES = {
          "locationRestrictions": ["Germany", "Jordan"], "description": DESC, "pubDate": NOW - 7200},
         {"title": "Power BI Developer", "companyName": "Cheap Ltd", "applicationLink": "https://himalayas.app/x/3",
          "locationRestrictions": [], "description": DESC, "pubDate": NOW - 7200, "minSalary": 30000, "maxSalary": 40000, "currency": "USD"},
+        {"title": "Staff Data Engineer", "companyName": "Opinov8", "applicationLink": "https://himalayas.app/x/5",
+         "locationRestrictions": [], "description": DESC + "<p>This role is open to candidates in Europe and LATAM.</p>", "pubDate": NOW - 3600},
+        {"title": "Data Platform Engineer", "companyName": "Anywhere Inc", "applicationLink": "https://himalayas.app/x/6",
+         "locationRestrictions": [], "description": DESC + "<p>We are fully remote and you can work from anywhere in the world.</p>", "pubDate": NOW - 3600},
         {"title": "Data Engineer", "companyName": "Stale Corp", "applicationLink": "https://himalayas.app/x/4",
          "locationRestrictions": [], "description": DESC, "pubDate": NOW - 86400 * 90},
     ]},
@@ -133,7 +137,11 @@ class PipelineTest(unittest.TestCase):
 
     def test_eligible_and_rejected(self):
         b = self.by
-        self.assertEqual(b[("Globex", "Senior Data Engineer")]["eligibility"], "ELIGIBLE")
+        # Himalayas "worldwide" with nothing in the text -> confirm; text limiting regions -> check; text saying anywhere -> eligible
+        self.assertEqual(b[("Globex", "Senior Data Engineer")]["eligibility"], "LIKELY")
+        self.assertEqual(b[("Opinov8", "Staff Data Engineer")]["eligibility"], "CHECK")
+        self.assertIn("Europe and LATAM", b[("Opinov8", "Staff Data Engineer")]["eligibility_evidence"])
+        self.assertEqual(b[("Anywhere Inc", "Data Platform Engineer")]["eligibility"], "ELIGIBLE")
         self.assertEqual(b[("Mideast Co", "Analytics Engineer")]["eligibility"], "ELIGIBLE")
         self.assertEqual(b[("Amazon", "Business Intelligence Engineer, Amazon Payments")]["eligibility"], "ELIGIBLE")
         self.assertEqual(b[("EuroSoft", "Power Platform Developer")]["eligibility"], "LIKELY")
